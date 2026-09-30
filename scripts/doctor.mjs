@@ -1,6 +1,6 @@
 ﻿// 健康檢查（業界標準五訊號）：新鮮度／筆數／欄位／品質／心跳
 // 用法：node doctor.mjs [--run <run_id>] [--quiet]
-// 結果寫進 health 表；每次給阿夜資料前先看這個
+// 結果寫進 health 表；每次給使用者資料前先看這個
 import { openDb, readMeta, recentRuns, utcNow, MIRROR_DIR } from './cex-db.mjs';
 import { createReadStream, existsSync, readFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';

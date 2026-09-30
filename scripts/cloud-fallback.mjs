@@ -11,7 +11,7 @@
 //   node cloud-fallback.mjs --repo <目錄>   repo 工作目錄（預設＝這支腳本的上一層）
 //   node cloud-fallback.mjs --limit 3      只跑前 3 個切分（小樣本測試；資料量不完整）
 //
-// 需要的環境變數：TELEGRAM_BOT_TOKEN（沒有就只印不送）、TELEGRAM_CHAT_ID（預設阿夜的 chat）
+// 需要的環境變數：TELEGRAM_BOT_TOKEN（沒有就只印不送）、TELEGRAM_CHAT_ID（預設使用者的 chat）
 //
 // 設計理由與取捨見 references/interface-hosting-design.md §七之四、handoff §0b。
 import { execFileSync } from 'node:child_process';

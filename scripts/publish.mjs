@@ -34,19 +34,24 @@ if (!existsSync(join(REPO, '.git'))) {
 }
 
 // ── 1. 同步腳本（單一來源＝這個目錄；repo 裡那份不要手改）──
+// ⚠️ 這些腳本會進**公開** repo：同步時把個人化的字樣中性化（記憶目錄裡那份保持原樣，
+//    所以這裡不可以用 copyFileSync——要用「讀→消毒→寫」）。
+const SANITIZE = [[/使用者/g, '使用者'], [/維護者/g, '維護者']];
+const sanitize = s => SANITIZE.reduce((t, [re, to]) => t.replace(re, to), s);
+
 const files = readdirSync(HERE).filter(f => f.endsWith('.mjs'));
 const target = join(REPO, 'scripts');
 if (!DRY) mkdirSync(target, { recursive: true });
 let copied = 0;
 for (const f of files) {
   const src = join(HERE, f), dst = join(target, f);
-  const same = existsSync(dst) && statSync(dst).size === statSync(src).size
-    && Buffer.compare(readFileSync(src), readFileSync(dst)) === 0;
+  const body = sanitize(readFileSync(src, 'utf8'));
+  const same = existsSync(dst) && readFileSync(dst, 'utf8') === body;
   if (same) continue;
-  if (!DRY) copyFileSync(src, dst);
+  if (!DRY) writeFileSync(dst, body, 'utf8');
   copied++;
 }
-log(`腳本同步：${copied} 支有更新（共 ${files.length} 支）`);
+log(`腳本同步：${copied} 支有更新（共 ${files.length} 支；已消毒個人字樣）`);
 
 // ── 2. 寫心跳（雲端備援唯一的判斷依據）──
 const db = openDb();

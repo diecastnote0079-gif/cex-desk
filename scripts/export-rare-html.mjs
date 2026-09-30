@@ -61,7 +61,7 @@ const html = `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8">
 </style></head><body>
 <h1>CeX MY 稀有候選池 — 遊戲片 RM${MIN}+ × 庫存 ≤${MAXQ}</h1>
 <div class="sub">抓取時間 ${now.replace('T', ' ').slice(0, 16)}（MYT）｜${rows.length} 筆｜只有庫存 ≤${MAXQ} 的才進這張表｜
-「庫存 1」不等於稀有，判斷看 <b>分店數／是否限定版／條碼區域</b>；價格與出手由阿夜定。</div>
+「庫存 1」不等於稀有，判斷看 <b>分店數／是否限定版／條碼區域</b>；價格與出手由使用者定。</div>
 <div class="bar">
  <input id="q" placeholder="搜尋遊戲名 / 條碼…" style="min-width:260px">
  <select id="p"><option value="">全部平台</option></select>

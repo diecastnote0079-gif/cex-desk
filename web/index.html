@@ -137,7 +137,7 @@ async function load(){
     $('#cat').innerHTML = '<option value="">全部分類</option>' + cats.map(c => `<option>${esc(c)}</option>`).join('');
     render();
   }catch(e){
-    $('#list').innerHTML = `<div class="err"><b>資料載入失敗</b><br>${esc(e.message)}<br><br>如果一直失敗，跟凜說一聲。</div>`;
+    $('#list').innerHTML = `<div class="err"><b>資料載入失敗</b><br>${esc(e.message)}<br><br>如果一直失敗，跟維護的人說一聲。</div>`;
     $('#meta').textContent = '載入失敗';
   }
 }

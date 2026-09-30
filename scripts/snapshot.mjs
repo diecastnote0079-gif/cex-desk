@@ -19,7 +19,7 @@ const arg = (n, d) => { const i = process.argv.indexOf('--' + n); return i > 0 ?
 
 const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10); // MYT
 const hhmm = new Date(Date.now() + 8 * 3600e3).toISOString().slice(11, 16).replace(':', '');
-// ⚠️ 史料不進凜的記憶（體積大）：預設寫到本機 D:\AI\cex-db\snapshots（可用 CEX_SNAP_DIR 覆寫）
+// ⚠️ 史料不進維護者的記憶（體積大）：預設寫到本機 D:\AI\cex-db\snapshots（可用 CEX_SNAP_DIR 覆寫）
 const snapDir = process.env.CEX_SNAP_DIR || 'D:\\AI\\cex-db\\snapshots';
 // ⚠️ 絕不覆蓋既有快照：snap-<date>.tsv 可能是基準檔（比對的錨點）
 let defaultOut = join(snapDir, `snap-${today}.tsv`);
