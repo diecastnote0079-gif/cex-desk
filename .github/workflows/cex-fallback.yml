@@ -1,0 +1,74 @@
+name: CeX 資料備援
+
+# 主動端是一台本機，每天兩次抓取並更新 state/ 與 data 分支。
+# 這裡只在主動端超過 24 小時沒有成功抓取時才動作；平時連抓都不抓。
+#
+# 排程用 UTC：01:00／07:00／13:00 = 馬來西亞時間 09:00／15:00／21:00。
+on:
+  schedule:
+    - cron: '0 1,7,13 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: '忽略 24 小時心跳，強制抓一次'
+        type: boolean
+        default: false
+
+concurrency:
+  group: cex-fallback
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  fallback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: 取出 repo
+        uses: actions/checkout@v4
+
+      - name: 準備 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: 檢查心跳 → 需要的話自己抓一次 → 推播
+        env:
+          # 抓下來的原始檔放 runner 的暫存目錄，不污染 repo
+          CEX_HOME: ${{ runner.temp }}/cex-db
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          ARGS=""
+          if [ "$FORCE" = "true" ]; then ARGS="--force"; fi
+          node scripts/cloud-fallback.mjs --repo "$GITHUB_WORKSPACE" $ARGS
+
+      - name: 更新手機頁資料
+        # 只在真的抓過（= 主動端斷線）時才有 current.tsv.gz；沒有的話這步會自己跳過
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WEB_DIR: ${{ runner.temp }}/cex-web
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          node scripts/publish-web.mjs \
+            --web "$WEB_DIR" \
+            --html "$GITHUB_WORKSPACE/web/index.html" \
+            --from-compact "${RUNNER_TEMP}/cex-db/current.tsv.gz" \
+            || echo "（這一輪沒有新的抓取資料，跳過頁面更新）"
+
+      - name: 提交狀態
+        if: always()
+        run: |
+          git config user.name  "cex-desk-bot"
+          git config user.email "noreply@users.noreply.github.com"
+          git add -A state
+          if git diff --cached --quiet; then
+            echo "狀態沒有變化，不提交"
+          else
+            git commit -m "state: $(date -u +%FT%TZ)"
+            git push
+          fi

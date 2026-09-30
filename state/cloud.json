@@ -1,0 +1,18 @@
+{
+ "at": "2026-09-30T13:18:07Z",
+ "runId": "20260930211727",
+ "scope": "web",
+ "items": 76636,
+ "new": 76636,
+ "gone": 0,
+ "priceChanged": 0,
+ "qtyChanged": 0,
+ "rebuilt": true,
+ "notified": true,
+ "sent": {
+  "ok": true,
+  "message_id": 143,
+  "error": null
+ },
+ "fetchSec": 39
+}
