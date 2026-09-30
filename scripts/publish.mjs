@@ -46,7 +46,9 @@ let copied = 0;
 for (const f of files) {
   const src = join(HERE, f), dst = join(target, f);
   const body = sanitize(readFileSync(src, 'utf8'));
-  const same = existsSync(dst) && readFileSync(dst, 'utf8') === body;
+  // ⚠️ repo 那份的換行可能是 CRLF（core.autocrlf=true 會把 checkout 出來的檔改成 CRLF）
+  //    → 比對前先正規化，否則每次都會誤判成「有更新」而重寫一遍
+  const same = existsSync(dst) && readFileSync(dst, 'utf8').replace(/\r\n/g, '\n') === body;
   if (same) continue;
   if (!DRY) writeFileSync(dst, body, 'utf8');
   copied++;
