@@ -1,15 +1,15 @@
-// CeX åˆ¤æ–·å°ï¼šç”¢ç”Ÿã€Œæ‰‹æ©Ÿé ã€è¦ç”¨çš„è³‡æ–™ï¼Œä¸¦ç™¼ä½ˆåˆ° GitHub Pages çš„ data åˆ†æ”¯
+// CeX 判斷台：產生「手機頁」要用的資料，並發佈到 GitHub Pages 的 data 分支
 //
-//   node publish-web.mjs                        PC ç”¨ï¼šå¾žæœ¬æ©Ÿè³‡æ–™åº«å–ã€Œæœ€æ–°ç‹€æ…‹ï¼‹è®Šå‹•å¸³ã€
-//   node publish-web.mjs --from-compact <æª”>     é›²ç«¯å‚™æ´ç”¨ï¼šå¾žæŠ“ä¸‹ä¾†çš„ç²¾ç°¡ç‹€æ…‹å–è³‡æ–™
-//   node publish-web.mjs --dry-run              åªç”¢ç”Ÿæª”æ¡ˆã€ä¸ commitï¼ä¸æŽ¨
-//   node publish-web.mjs --web <ç›®éŒ„>            data åˆ†æ”¯çš„å·¥ä½œç›®éŒ„ï¼ˆé è¨­ D:\AI\cex-webï¼‰
+//   node publish-web.mjs                        PC 用：從本機資料庫取「最新狀態＋變動帳」
+//   node publish-web.mjs --from-compact <檔>     雲端備援用：從抓下來的精簡狀態取資料
+//   node publish-web.mjs --dry-run              只產生檔案、不 commit／不推
+//   node publish-web.mjs --web <目錄>            data 分支的工作目錄（預設 D:\AI\cex-web）
 //
-// ç‚ºä»€éº¼æ˜¯ã€Œåˆ†æ”¯ï¼‹amendã€è€Œä¸æ˜¯æ¯å¤©ä¸€å€‹ commitï¼š
-//   items.json ç´„ 5 MBï¼Œä¸€å¤©æŽ¨å…©æ¬¡ï¼ä¸€å¹´ 3.6 GB çš„ git æ­·å²ã€‚é€™å€‹åˆ†æ”¯æ°¸é åªæœ‰**ä¸€å€‹ commit**
-//   ï¼ˆæ¯æ¬¡ --amend å¾Œ force pushï¼‰ï¼Œé ç«¯ä¸æœƒé•·å¤§ï¼›èˆŠè³‡æ–™æ²’æœ‰ä¿ç•™åƒ¹å€¼ï¼Œæœ¬æ©Ÿçš„è³‡æ–™åº«æ‰æ˜¯å²æ–™ã€‚
+// 為什麼是「分支＋amend」而不是每天一個 commit：
+//   items.json 約 5 MB，一天推兩次＝一年 3.6 GB 的 git 歷史。這個分支永遠只有**一個 commit**
+//   （每次 --amend 後 force push），遠端不會長大；舊資料沒有保留價值，本機的資料庫才是史料。
 //
-// data åˆ†æ”¯å…§å®¹ï¼šindex.htmlï¼ˆè¡Œå‹•ç‰ˆé é¢ï¼‰ï¼‹ items.jsonï¼ˆæœ€æ–°ç‹€æ…‹ï¼‰ï¼‹ changes.jsonï¼ˆè®Šå‹•å¸³ï¼‰ï¼‹ meta.json
+// data 分支內容：index.html（行動版頁面）＋ items.json（最新狀態）＋ changes.json（變動帳）＋ meta.json
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, copyFileSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
@@ -37,7 +37,7 @@ const git = (args, opts = {}) => execFileSync('git', ['-C', WEB, ...args], { enc
 const gitEnv = () => {
   const env = { ...process.env };
   const token = process.env.GITHUB_TOKEN;
-  if (token) {   // æŽˆæ¬Šèµ°ç’°å¢ƒè®Šæ•¸ï¼Œä¸å¯«é€² remote URLã€ä¸é€²å‘½ä»¤åˆ—
+  if (token) {   // 授權走環境變數，不寫進 remote URL、不進命令列
     env.GIT_CONFIG_COUNT = '1';
     env.GIT_CONFIG_KEY_0 = 'http.extraheader';
     env.GIT_CONFIG_VALUE_0 = 'AUTHORIZATION: basic ' + Buffer.from(`x-access-token:${token}`).toString('base64');
@@ -45,7 +45,7 @@ const gitEnv = () => {
   return env;
 };
 
-// â”€â”€ 1. å–å¾—è³‡æ–™ â”€â”€
+// ── 1. 取得資料 ──
 let items = [], source, runId = null, scope = 'web', changes = [];
 
 if (COMPACT) {
@@ -78,57 +78,57 @@ if (COMPACT) {
 }
 
 items.sort((a, b) => b[3] - a[3]);
-log(`è³‡æ–™ï¼š${items.length} ç­†ï¼ˆä¾†æº ${source}${runId ? `ï¼Œrun ${runId}` : ''}ï¼‰${changes.length ? `ï½œè®Šå‹• ${changes.length} ç­†` : ''}`);
+log(`資料：${items.length} 筆（來源 ${source}${runId ? `，run ${runId}` : ''}）${changes.length ? `｜變動 ${changes.length} 筆` : ''}`);
 
-// â”€â”€ 2. æº–å‚™ç™¼ä½ˆç›®éŒ„ï¼ˆè¦å…ˆæœ‰ repo æ‰èƒ½å¯«æª”ï¼šgit clone ä¸æŽ¥å—éžç©ºç›®éŒ„ï¼‰â”€â”€
+// ── 2. 準備發佈目錄（要先有 repo 才能寫檔：git clone 不接受非空目錄）──
 function ensureRepo() {
   if (DRY) return;
   if (existsSync(join(WEB, '.git'))) {
     try { git(['fetch', 'origin', BRANCH], { env: gitEnv() }); git(['reset', '--hard', `origin/${BRANCH}`]); }
-    catch (e) { log(`âš ï¸ åŒæ­¥é ç«¯å¤±æ•—ï¼ˆçºŒç”¨æœ¬åœ°ï¼‰ï¼š${String(e.message).slice(0, 160)}`); }
+    catch (e) { log(`⚠️ 同步遠端失敗（續用本地）：${String(e.message).slice(0, 160)}`); }
     return;
   }
-  if (existsSync(WEB)) {   // åªæœ‰ã€Œä¸æ˜¯ git repo çš„æš«å­˜ç›®éŒ„ã€æ‰æœƒè¢«æ¸…æŽ‰ï¼ˆä¿è­·çœŸæ­£çš„ repoï¼‰
-    log(`âš ï¸ ${WEB} å­˜åœ¨ä½†æ²’æœ‰ .git â†’ è¦–ç‚ºæš«å­˜ç›®éŒ„ï¼Œæ¸…æŽ‰é‡å»º`);
+  if (existsSync(WEB)) {   // 只有「不是 git repo 的暫存目錄」才會被清掉（保護真正的 repo）
+    log(`⚠️ ${WEB} 存在但沒有 .git → 視為暫存目錄，清掉重建`);
     rmSync(WEB, { recursive: true, force: true });
   }
-  log(`ç¬¬ä¸€æ¬¡ï¼šclone ${BRANCH} åˆ†æ”¯ â†’ ${WEB}`);
+  log(`第一次：clone ${BRANCH} 分支 → ${WEB}`);
   execFileSync('git', ['clone', '--branch', BRANCH, '--single-branch', REPO_URL, WEB], { stdio: 'inherit' });
 }
 ensureRepo();
 
-// â”€â”€ 3. å¯«æª” â”€â”€
+// ── 3. 寫檔 ──
 if (!DRY) mkdirSync(WEB, { recursive: true });
 const write = (name, obj) => {
   if (DRY) return;
   writeFileSync(join(WEB, name), JSON.stringify(obj) + '\n');
 };
 if (!DRY && existsSync(HTML)) copyFileSync(HTML, join(WEB, 'index.html'));
-else if (!existsSync(HTML)) log(`âš ï¸ æ‰¾ä¸åˆ°é é¢ ${HTML}ï¼ˆåªæ›´æ–°è³‡æ–™ï¼‰`);
+else if (!existsSync(HTML)) log(`⚠️ 找不到頁面 ${HTML}（只更新資料）`);
 
 write('items.json', { cols: COLS, items });
 write('changes.json', { generatedAt: utcNow(), days: CHG_DAYS, rows: changes });
 write('meta.json', { generatedAt: utcNow(), source, runId, scope, count: items.length, changes: changes.length });
 if (!DRY) {
   const bytes = readFileSync(join(WEB, 'items.json')).length;
-  log(`items.json ${(bytes / 1048576).toFixed(1)} MBï¼ˆæœªå£“ç¸®ï¼›GitHub Pages æœƒè‡ªå‹• gzipï¼‰`);
+  log(`items.json ${(bytes / 1048576).toFixed(1)} MB（未壓縮；GitHub Pages 會自動 gzip）`);
 }
 
-// â”€â”€ 4. ç™¼ä½ˆï¼ˆåˆ†æ”¯æ°¸é ä¸€å€‹ commitï¼‰â”€â”€
-if (DRY) { log('--dry-runï¼šä¸ commitã€ä¸æŽ¨ã€‚'); process.exit(0); }
+// ── 4. 發佈（分支永遠一個 commit）──
+if (DRY) { log('--dry-run：不 commit、不推。'); process.exit(0); }
 git(['config', 'user.name', 'cex-desk-bot']);
 git(['config', 'user.email', 'noreply@users.noreply.github.com']);
 git(['add', '-A']);
 let same = false;
 try { git(['diff', '--cached', '--quiet']); same = true; } catch {}
-if (same) { log('å…§å®¹æ²’æœ‰è®ŠåŒ–ï¼Œä¸æŽ¨ã€‚'); process.exit(0); }
-git(['commit', '--amend', '-m', `data: æœ€æ–°è³‡æ–™ ${utcNow()}ï¼ˆ${items.length} ç­†ï¼‰`]);
-log('å·² amend æˆå–®ä¸€ commitã€‚');
-if (!PUSH) { log('--no-pushï¼šä¸æŽ¨ã€‚'); process.exit(0); }
+if (same) { log('內容沒有變化，不推。'); process.exit(0); }
+git(['commit', '--amend', '-m', `data: 最新資料 ${utcNow()}（${items.length} 筆）`]);
+log('已 amend 成單一 commit。');
+if (!PUSH) { log('--no-push：不推。'); process.exit(0); }
 try {
   git(['push', '--force', 'origin', `HEAD:${BRANCH}`], { env: gitEnv(), stdio: 'pipe' });
-  log('âœ… å·²æŽ¨ä¸Š GitHub Pages çš„è³‡æ–™åˆ†æ”¯ã€‚');
+  log('✅ 已推上 GitHub Pages 的資料分支。');
 } catch (e) {
-  console.error(`âŒ æŽ¨é€å¤±æ•—ï¼š${String(e.stderr || e.stdout || e.message).slice(0, 400)}`);
+  console.error(`❌ 推送失敗：${String(e.stderr || e.stdout || e.message).slice(0, 400)}`);
   process.exit(1);
 }

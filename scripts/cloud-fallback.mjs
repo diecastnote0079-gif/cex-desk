@@ -1,19 +1,19 @@
-// CeX é›²ç«¯å‚™æ´ï¼ˆGitHub Actions ç”¨ï¼‰
+// CeX 雲端備援（GitHub Actions 用）
 //
-// è§’è‰²ï¼šæœ¬æ©Ÿ PC æ˜¯ä¸»åŠ›ï¼ˆæ¯å¤© 08:30ï¼20:00 æŠ“ â†’ å°å¸³ â†’ å¥åº·æª¢æŸ¥ï¼‰ã€‚é€™æ”¯åªåœ¨**æœ¬æ©Ÿè¶…éŽ 24 å°æ™‚
-// æ²’æœ‰æˆåŠŸæŠ“å–**æ™‚æ‰å‹•ï¼šè‡ªå·±æŠ“ä¸€æ¬¡å…¨ç«™ â†’ è·Ÿä¸Šä¸€æ¬¡é›²ç«¯å­˜ä¸‹ä¾†çš„ç‹€æ…‹æ¯”å° â†’ ç™¼ Telegram â†’ æ›´æ–°ç‹€æ…‹ã€‚
-// æœ¬æ©Ÿæ­£å¸¸æ™‚å®ƒä»€éº¼éƒ½ä¸åšï¼ˆé€£æŠ“éƒ½ä¸æŠ“ï¼‰ï¼Œæ‰€ä»¥å¹³æ™‚ä¸æ¶ˆè€—ä»»ä½•è³‡æºã€‚
+// 角色：本機 PC 是主力（每天 08:30／20:00 抓 → 對帳 → 健康檢查）。這支只在**本機超過 24 小時
+// 沒有成功抓取**時才動：自己抓一次全站 → 跟上一次雲端存下來的狀態比對 → 發 Telegram → 更新狀態。
+// 本機正常時它什麼都不做（連抓都不抓），所以平時不消耗任何資源。
 //
-// ç”¨æ³•ï¼š
-//   node cloud-fallback.mjs                æ­£å¸¸è·‘ï¼ˆæœƒå…ˆçœ‹å¿ƒè·³ï¼‰
-//   node cloud-fallback.mjs --force        å¿½ç•¥å¿ƒè·³ï¼Œå¼·åˆ¶æŠ“ä¸€æ¬¡ï¼ˆé©—æ”¶ï¼è£œè³‡æ–™ç”¨ï¼‰
-//   node cloud-fallback.mjs --dry-run      ä¸é€ Telegramã€ä¸å¯«ç‹€æ…‹æª”ï¼Œåªå°å‡ºä¾†æª¢æŸ¥
-//   node cloud-fallback.mjs --repo <ç›®éŒ„>   repo å·¥ä½œç›®éŒ„ï¼ˆé è¨­ï¼é€™æ”¯è…³æœ¬çš„ä¸Šä¸€å±¤ï¼‰
-//   node cloud-fallback.mjs --limit 3      åªè·‘å‰ 3 å€‹åˆ‡åˆ†ï¼ˆå°æ¨£æœ¬æ¸¬è©¦ï¼›è³‡æ–™é‡ä¸å®Œæ•´ï¼‰
+// 用法：
+//   node cloud-fallback.mjs                正常跑（會先看心跳）
+//   node cloud-fallback.mjs --force        忽略心跳，強制抓一次（驗收／補資料用）
+//   node cloud-fallback.mjs --dry-run      不送 Telegram、不寫狀態檔，只印出來檢查
+//   node cloud-fallback.mjs --repo <目錄>   repo 工作目錄（預設＝這支腳本的上一層）
+//   node cloud-fallback.mjs --limit 3      只跑前 3 個切分（小樣本測試；資料量不完整）
 //
-// éœ€è¦çš„ç’°å¢ƒè®Šæ•¸ï¼šTELEGRAM_BOT_TOKENï¼ˆæ²’æœ‰å°±åªå°ä¸é€ï¼‰ã€TELEGRAM_CHAT_IDï¼ˆé è¨­é˜¿å¤œçš„ chatï¼‰
+// 需要的環境變數：TELEGRAM_BOT_TOKEN（沒有就只印不送）、TELEGRAM_CHAT_ID（預設阿夜的 chat）
 //
-// è¨­è¨ˆç†ç”±èˆ‡å–æ¨è¦‹ references/interface-hosting-design.md Â§ä¸ƒä¹‹å››ã€handoff Â§0bã€‚
+// 設計理由與取捨見 references/interface-hosting-design.md §七之四、handoff §0b。
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
@@ -29,25 +29,25 @@ const STATE = join(REPO, 'state');
 const FORCE = has('force');
 const DRY = has('dry-run');
 const LIMIT = Number(argOf('limit', 0));
-const HEARTBEAT = join(STATE, 'heartbeat.json');   // æœ¬æ©Ÿ PC çš„å¿ƒè·³ï¼ˆé›²ç«¯åªè®€ã€ä¸æ”¹å¯«ï¼‰
+const HEARTBEAT = join(STATE, 'heartbeat.json');   // 本機 PC 的心跳（雲端只讀、不改寫）
 const BASELINE = join(STATE, 'baseline.tsv.gz');
-const CLOUD = join(STATE, 'cloud.json');           // é›²ç«¯è‡ªå·±çš„ç´€éŒ„ï¼ˆå«ä¸Šæ¬¡ç™¼è¨Šæ™‚é–“ï¼‰
+const CLOUD = join(STATE, 'cloud.json');           // 雲端自己的紀錄（含上次發訊時間）
 const FRESH_HOURS = Number(process.env.CEX_FRESH_HOURS || 24);
 const STALE_BASE_HOURS = Number(process.env.CEX_STALE_BASE_HOURS || 48);
-// é€™æ”¯æœƒé€²å…¬é–‹ repoï¼Œæ‰€ä»¥æ”¶è¨Šå°è±¡ä¸å¯«æ­»åœ¨é€™è£¡ï¼ˆèµ° secretsï¼›è¦‹ workflowï¼‰
+// 這支會進公開 repo，所以收訊對象不寫死在這裡（走 secrets；見 workflow）
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 
 const utcNow = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
 const mytNow = () => new Date(Date.now() + 8 * 3600e3).toISOString().replace('Z', '+08:00');
-// firstStockDate æ˜¯ MYT æ™‚é–“ï¼Œå­—ä¸²æ ¼å¼æœªå¿…å¸¶æ™‚å€ â†’ çµ±ä¸€æ­£è¦åŒ–æˆ YYYY-MM-DDTHH:MM:SS å†æ¯”å¤§å°
+// firstStockDate 是 MYT 時間，字串格式未必帶時區 → 統一正規化成 YYYY-MM-DDTHH:MM:SS 再比大小
 const normTs = s => String(s || '').replace(' ', 'T').slice(0, 19);
 const cutoff24h = () => normTs(new Date(Date.now() + 8 * 3600e3 - 86400e3).toISOString());
 const hours = ms => +(ms / 3600e3).toFixed(1);
 const readJson = p => (existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) : null);
 const log = m => console.log(`[${utcNow()}] ${m}`);
 
-// â”€â”€ ç²¾ç°¡ç‹€æ…‹æª”çš„è®€å–ï¼ˆæ ¼å¼ç”± mirror.mjs --compact ç”¢ç”Ÿï¼‰â”€â”€
+// ── 精簡狀態檔的讀取（格式由 mirror.mjs --compact 產生）──
 function readState(file) {
   const rows = gunzipSync(readFileSync(file)).toString('utf8').split('\n');
   const cols = rows.shift().replace(/^#/, '').split('\t');
@@ -64,39 +64,39 @@ function readState(file) {
   return { cols, map };
 }
 
-// â”€â”€ 1. å¿ƒè·³ï¼šæœ¬æ©Ÿé‚„åœ¨è·‘å°±ä¸è¦å‹• â”€â”€
+// ── 1. 心跳：本機還在跑就不要動 ──
 const hb = readJson(HEARTBEAT);
 const lastGoodMs = hb?.lastGoodRun ? Date.parse(hb.lastGoodRun) : null;
 const pcAgeH = lastGoodMs ? hours(Date.now() - lastGoodMs) : null;
-log(hb ? `å¿ƒè·³ï¼š${hb.source}ï¼${hb.lastGoodRun}ï¼ˆ${pcAgeH} å°æ™‚å‰ï¼Œ${hb.items ?? '?'} ç­†ï¼‰` : 'æ²’æœ‰å¿ƒè·³æª”ï¼ˆè¦–ç‚ºæœ¬æ©Ÿå¾žæœªæˆåŠŸæŠ“å–ï¼‰');
+log(hb ? `心跳：${hb.source}／${hb.lastGoodRun}（${pcAgeH} 小時前，${hb.items ?? '?'} 筆）` : '沒有心跳檔（視為本機從未成功抓取）');
 
 if (!FORCE && pcAgeH !== null && pcAgeH < FRESH_HOURS) {
-  log(`æœ¬æ©Ÿè³‡æ–™é‚„åœ¨ ${FRESH_HOURS} å°æ™‚å…§ â†’ é›²ç«¯å‚™æ´ä¸åšä»»ä½•äº‹ï¼ˆä¸æŠ“å–ã€ä¸ç™¼è¨Šï¼‰ã€‚`);
+  log(`本機資料還在 ${FRESH_HOURS} 小時內 → 雲端備援不做任何事（不抓取、不發訊）。`);
   console.log('FALLBACK_SUMMARY ' + JSON.stringify({ action: 'skip', reason: 'fresh', pcAgeHours: pcAgeH }));
   process.exit(0);
 }
-log(FORCE ? 'ï¼ˆ--forceï¼šå¿½ç•¥å¿ƒè·³ï¼Œå¼·åˆ¶åŸ·è¡Œï¼‰' : `æœ¬æ©Ÿå·² ${pcAgeH} å°æ™‚æ²’æ›´æ–° â†’ å‚™æ´æŽ¥æ‰‹ã€‚`);
+log(FORCE ? '（--force：忽略心跳，強制執行）' : `本機已 ${pcAgeH} 小時沒更新 → 備援接手。`);
 
-// â”€â”€ 2. è‡ªå·±æŠ“ä¸€æ¬¡å…¨ç«™ï¼ˆç”¨åŒä¸€æ”¯ mirrorï¼Œé¿å…å…©å¥—æŠ“å–é‚è¼¯ï¼‰â”€â”€
+// ── 2. 自己抓一次全站（用同一支 mirror，避免兩套抓取邏輯）──
 const tmpDir = process.env.CEX_HOME || join(REPO, '.tmp');
 mkdirSync(tmpDir, { recursive: true });
 const currentFile = join(tmpDir, 'current.tsv.gz');
 const runId = mytNow().replace(/[-:T]/g, '').slice(0, 14);
 const t0 = Date.now();
-log(`é–‹å§‹æŠ“å–ï¼ˆscope=webï¼Œrun_id=${runId}ï¼‰â€¦`);
+log(`開始抓取（scope=web，run_id=${runId}）…`);
 execFileSync(process.execPath, [
   join(HERE, 'mirror.mjs'), '--scope', 'web', '--compact', currentFile,
   ...(LIMIT ? ['--limit', String(LIMIT)] : []),
 ], { stdio: 'inherit', env: { ...process.env, CEX_RUN_ID: runId } });
 const fetchSec = ((Date.now() - t0) / 1000).toFixed(0);
-log(`æŠ“å–å®Œæˆï¼Œè€—æ™‚ ${fetchSec} ç§’`);
+log(`抓取完成，耗時 ${fetchSec} 秒`);
 
-// â”€â”€ 3. è·Ÿé›²ç«¯å­˜ä¸‹ä¾†çš„ä¸Šæ¬¡ç‹€æ…‹æ¯”å° â”€â”€
+// ── 3. 跟雲端存下來的上次狀態比對 ──
 const cur = readState(currentFile);
 const prev = existsSync(BASELINE) ? readState(BASELINE) : null;
 const prevMeta = readJson(CLOUD);
 const baseAgeH = prevMeta?.at ? hours(Date.now() - Date.parse(prevMeta.at)) : null;
-const rebuilt = !prev || baseAgeH === null || baseAgeH > STALE_BASE_HOURS;   // åŸºæº–å¤ªèˆŠ â†’ åªå ±è¿‘ 24hï¼Œé¿å…æ´—ç‰ˆ
+const rebuilt = !prev || baseAgeH === null || baseAgeH > STALE_BASE_HOURS;   // 基準太舊 → 只報近 24h，避免洗版
 
 const isNew = [], gone = [], priceChanged = [], qtyChanged = [];
 for (const [id, c] of cur.map) {
@@ -110,48 +110,48 @@ if (prev) for (const [id, p] of prev.map) if (!cur.map.has(id)) gone.push({ id, 
 const cut = cutoff24h();
 const arrivals = [...cur.map].filter(([, v]) => normTs(v.first) >= cut).map(([id, v]) => ({ id, ...v }));
 
-// åŸºæº–å£žæŽ‰æ™‚åªä¿¡ä»»ã€Œè¿‘æœŸæ–°ä¸Šæž¶ã€ï¼›åŸºæº–æ­£å¸¸æ™‚ä¿¡ä»»å®Œæ•´è®Šå‹•å¸³
+// 基準壞掉時只信任「近期新上架」；基準正常時信任完整變動帳
 const listed = rebuilt ? arrivals : isNew;
-log(`æ¯”å°ï¼šæœ¬æ¬¡ ${cur.map.size} ç­†ï½œæ–°ä¸Šæž¶ ${isNew.length}ï½œè³£å…‰/æ¶ˆå¤± ${gone.length}ï½œæ”¹åƒ¹ ${priceChanged.length}ï½œåº«å­˜è®Šå‹• ${qtyChanged.length}`
-  + (rebuilt ? `ï½œåŸºæº–${prev ? `å·² ${baseAgeH} å°æ™‚` : 'ä¸å­˜åœ¨'} â†’ åªåˆ—è¿‘ 24 å°æ™‚æ–°ä¸Šæž¶ ${arrivals.length} ç­†` : ''));
+log(`比對：本次 ${cur.map.size} 筆｜新上架 ${isNew.length}｜賣光/消失 ${gone.length}｜改價 ${priceChanged.length}｜庫存變動 ${qtyChanged.length}`
+  + (rebuilt ? `｜基準${prev ? `已 ${baseAgeH} 小時` : '不存在'} → 只列近 24 小時新上架 ${arrivals.length} 筆` : ''));
 
-// ç™¼è¨Šè¦å‰‡ï¼šâ‘  é€™æ˜¯é›»è…¦æ–·ç·šå¾Œçš„ç¬¬ä¸€æ¬¡æŽ¥æ‰‹ â†’ ä¸€å®šè¬› â‘¡ æœ‰ RM100+ æˆ–åº«å­˜â‰¤1 çš„è²¨ â†’ ä¸€å®šè¬›
-// å…¶é¤˜ï¼ˆé›»è…¦ä¸€ç›´æ²’é–‹ã€åˆæ²’å¥½è²¨ï¼‰â†’ åªæ›´æ–°ç‹€æ…‹ã€ä¸æ‰“æ“¾ä»–ï¼ˆã€Œä¸ä¸»å‹•é€šçŸ¥ã€ï¼‹ã€Œç©ºæ‰‹è€Œå›žæ˜¯å¸¸æ…‹ã€ï¼‰
+// 發訊規則：① 這是電腦斷線後的第一次接手 → 一定講 ② 有 RM100+ 或庫存≤1 的貨 → 一定講
+// 其餘（電腦一直沒開、又沒好貨）→ 只更新狀態、不打擾他（「不主動通知」＋「空手而回是常態」）
 const worth = listed.filter(x => x.price >= 100 || x.qty <= 1);
 const firstSincePc = !prevMeta || (lastGoodMs !== null && Date.parse(prevMeta.at) < lastGoodMs);
 const notify = firstSincePc || worth.length > 0;
-log(`ç™¼è¨Šåˆ¤æ–·ï¼š${notify ? 'è¦ç™¼' : 'ä¸ç™¼'}ï¼ˆ${firstSincePc ? 'é›»è…¦æ–·ç·šå¾Œç¬¬ä¸€æ¬¡' : `å¥½è²¨ ${worth.length} ç­†`}ï¼‰`);
+log(`發訊判斷：${notify ? '要發' : '不發'}（${firstSincePc ? '電腦斷線後第一次' : `好貨 ${worth.length} 筆`}）`);
 
-// â”€â”€ 4. çµ„ Telegram è¨Šæ¯ â”€â”€
-const fmt = x => `ãƒ»${x.name || '(ç„¡å)'}ï¼ˆ${x.cat || '?'}ï¼‰RM${x.price}`
-  + (x.qty <= 1 ? 'ï½œåº«å­˜â‰¤1' : `ï½œåº«å­˜ ${x.qty}`) + (x.cash ? `ï½œè²·å– RM${x.cash}` : '');
+// ── 4. 組 Telegram 訊息 ──
+const fmt = x => `・${x.name || '(無名)'}（${x.cat || '?'}）RM${x.price}`
+  + (x.qty <= 1 ? '｜庫存≤1' : `｜庫存 ${x.qty}`) + (x.cash ? `｜買取 RM${x.cash}` : '');
 const lines = [];
-lines.push(`ðŸ›° CeX é›²ç«¯å‚™æ´æŽ¥æ‰‹${FORCE ? 'ï¼ˆæ‰‹å‹•å¼·åˆ¶ï¼‰' : ''}`);
-lines.push(pcAgeH === null ? 'é›»è…¦å¾žæœªå›žå ±æˆåŠŸæŠ“å–' : `é›»è…¦æœ€å¾ŒæˆåŠŸæŠ“å–ï¼š${pcAgeH} å°æ™‚å‰`);
-lines.push(`é›²ç«¯æŠ“å–ï¼š${cur.map.size} ç­†ï¼${fetchSec} ç§’`);
-lines.push(rebuilt ? `ï¼ˆé›²ç«¯åŸºæº–${prev ? 'å·²é€¾ 48 å°æ™‚' : 'ä¸å­˜åœ¨'} â†’ é€™è¼ªåªåˆ—è¿‘ 24 å°æ™‚æ–°ä¸Šæž¶ï¼‰`
-  : `æ–°ä¸Šæž¶ ${isNew.length}ï½œè³£å…‰ ${gone.length}ï½œæ”¹åƒ¹ ${priceChanged.length}ï½œåº«å­˜è®Šå‹• ${qtyChanged.length}`);
+lines.push(`🛰 CeX 雲端備援接手${FORCE ? '（手動強制）' : ''}`);
+lines.push(pcAgeH === null ? '電腦從未回報成功抓取' : `電腦最後成功抓取：${pcAgeH} 小時前`);
+lines.push(`雲端抓取：${cur.map.size} 筆／${fetchSec} 秒`);
+lines.push(rebuilt ? `（雲端基準${prev ? '已逾 48 小時' : '不存在'} → 這輪只列近 24 小時新上架）`
+  : `新上架 ${isNew.length}｜賣光 ${gone.length}｜改價 ${priceChanged.length}｜庫存變動 ${qtyChanged.length}`);
 
 if (worth.length) {
-  lines.push('â”€â”€â”€â”€â”€', 'ðŸ†• å€¼å¾—çœ‹çš„ï¼ˆRM100+ æˆ–åº«å­˜â‰¤1ï¼‰ï¼š');
+  lines.push('─────', '🆕 值得看的（RM100+ 或庫存≤1）：');
   for (const x of worth.slice(0, 12)) lines.push(fmt(x));
-  if (worth.length > 12) lines.push(`â€¦å¦æœ‰ ${worth.length - 12} ç­†`);
-  if (listed.length > worth.length) lines.push(`ï¼ˆå…¶é¤˜ ${listed.length - worth.length} ç­†ä¸€èˆ¬å“ç•¥ï¼‰`);
+  if (worth.length > 12) lines.push(`…另有 ${worth.length - 12} 筆`);
+  if (listed.length > worth.length) lines.push(`（其餘 ${listed.length - worth.length} 筆一般品略）`);
 } else {
-  lines.push('â”€â”€â”€â”€â”€', 'ðŸ†• æ²’æœ‰ RM100+ æˆ–åº«å­˜â‰¤1 çš„ï¼ˆç©ºæ‰‹è€Œå›žæ˜¯å¸¸æ…‹ï¼‰');
+  lines.push('─────', '🆕 沒有 RM100+ 或庫存≤1 的（空手而回是常態）');
 }
 if (!rebuilt && priceChanged.length) {
-  lines.push('â”€â”€â”€â”€â”€', `ðŸ’° æ”¹åƒ¹ ${priceChanged.length} ç­†ï¼š`);
-  for (const x of priceChanged.slice(0, 8)) lines.push(`ãƒ»${x.name}ï¼ˆ${x.cat}ï¼‰RM${x.from} â†’ RM${x.to}${x.to < x.from ? 'ï¼ˆé™ï¼‰' : 'ï¼ˆå‡ï¼‰'}`);
-  if (priceChanged.length > 8) lines.push(`â€¦å¦æœ‰ ${priceChanged.length - 8} ç­†`);
+  lines.push('─────', `💰 改價 ${priceChanged.length} 筆：`);
+  for (const x of priceChanged.slice(0, 8)) lines.push(`・${x.name}（${x.cat}）RM${x.from} → RM${x.to}${x.to < x.from ? '（降）' : '（升）'}`);
+  if (priceChanged.length > 8) lines.push(`…另有 ${priceChanged.length - 8} 筆`);
 }
 const msg = lines.join('\n').slice(0, 3800);
-console.log('\n===== Telegram è¨Šæ¯é è¦½ =====\n' + msg + '\n=============================\n');
+console.log('\n===== Telegram 訊息預覽 =====\n' + msg + '\n=============================\n');
 
 let sent = null;
-if (DRY) log('--dry-runï¼šä¸é€ Telegramã€ä¸å¯«ç‹€æ…‹æª”ã€‚');
-else if (!notify) log('ä¸æ‰“æ“¾ï¼ˆç‹€æ…‹ç…§æ¨£æ›´æ–°ï¼Œåªæ˜¯ä¸ç™¼è¨Šï¼‰ã€‚');
-else if (!TOKEN || !CHAT_ID) { log('âš ï¸ æ²’æœ‰ TELEGRAM_BOT_TOKENï¼TELEGRAM_CHAT_ID â†’ åªå°ä¸é€ï¼ˆç‹€æ…‹æª”ä»æœƒæ›´æ–°ï¼‰ã€‚'); }
+if (DRY) log('--dry-run：不送 Telegram、不寫狀態檔。');
+else if (!notify) log('不打擾（狀態照樣更新，只是不發訊）。');
+else if (!TOKEN || !CHAT_ID) { log('⚠️ 沒有 TELEGRAM_BOT_TOKEN／TELEGRAM_CHAT_ID → 只印不送（狀態檔仍會更新）。'); }
 else {
   const r = await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
@@ -159,11 +159,11 @@ else {
   });
   const j = await r.json();
   sent = { ok: !!j.ok, message_id: j.result?.message_id, error: j.ok ? null : j.description };
-  log(sent.ok ? `âœ… Telegram å·²é€å‡ºï¼ˆmessage_id ${sent.message_id}ï¼‰` : `âŒ Telegram å¤±æ•—ï¼š${j.description}`);
+  log(sent.ok ? `✅ Telegram 已送出（message_id ${sent.message_id}）` : `❌ Telegram 失敗：${j.description}`);
   if (!sent.ok) process.exitCode = 1;
 }
 
-// â”€â”€ 5. æ›´æ–°ç‹€æ…‹ï¼ˆåªåœ¨çœŸçš„åšå®Œæ™‚å¯«ï¼›å¿ƒè·³æª”æ˜¯æœ¬æ©Ÿçš„ï¼Œé›²ç«¯åªè®€ä¸æ”¹ï¼‰â”€â”€
+// ── 5. 更新狀態（只在真的做完時寫；心跳檔是本機的，雲端只讀不改）──
 if (!DRY) {
   mkdirSync(STATE, { recursive: true });
   copyFileSync(currentFile, BASELINE);
@@ -172,7 +172,7 @@ if (!DRY) {
     new: isNew.length, gone: gone.length, priceChanged: priceChanged.length, qtyChanged: qtyChanged.length,
     rebuilt, notified: !!sent?.ok, sent, fetchSec: +fetchSec,
   }, null, 1) + '\n');
-  log('ç‹€æ…‹æª”å·²æ›´æ–°ï¼ˆbaseline.tsv.gzï¼cloud.jsonï¼‰');
+  log('狀態檔已更新（baseline.tsv.gz／cloud.json）');
 }
 
 console.log('FALLBACK_SUMMARY ' + JSON.stringify({
