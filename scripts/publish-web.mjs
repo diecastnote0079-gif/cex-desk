@@ -11,7 +11,7 @@
 //
 // data 分支內容：index.html（行動版頁面）＋ items.json（最新狀態）＋ changes.json（變動帳）＋ meta.json
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, copyFileSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, copyFileSync, writeFileSync, readFileSync, rmSync, readdirSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -103,8 +103,15 @@ const write = (name, obj) => {
   if (DRY) return;
   writeFileSync(join(WEB, name), JSON.stringify(obj) + '\n');
 };
-if (!DRY && existsSync(HTML)) copyFileSync(HTML, join(WEB, 'index.html'));
-else if (!existsSync(HTML)) log(`⚠️ 找不到頁面 ${HTML}（只更新資料）`);
+// 把 repo 的 web/ 整個目錄複製到資料分支根目錄（index.html、manifest.webmanifest、icons…）
+const WEB_SRC = dirname(HTML);
+if (existsSync(WEB_SRC)) {
+  const pageFiles = readdirSync(WEB_SRC);
+  if (!DRY) for (const f of pageFiles) copyFileSync(join(WEB_SRC, f), join(WEB, f));
+  log(`頁面檔案同步：${pageFiles.length} 個（${pageFiles.join('、')}）`);
+} else {
+  log(`⚠️ 找不到頁面目錄 ${WEB_SRC}（只更新資料）`);
+}
 
 write('items.json', { cols: COLS, items });
 write('changes.json', { generatedAt: utcNow(), days: CHG_DAYS, rows: changes });
