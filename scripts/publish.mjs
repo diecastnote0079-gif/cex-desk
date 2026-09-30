@@ -45,10 +45,11 @@ if (!DRY) mkdirSync(target, { recursive: true });
 let copied = 0;
 for (const f of files) {
   const src = join(HERE, f), dst = join(target, f);
+  // ⚠️ 兩邊的換行都可能被 core.autocrlf=true 改成 CRLF → 比對前**兩邊都**正規化，
+  //    否則每次都會誤判成「有更新」而反覆重寫（實測：不這樣做會一直報「N 支有更新」）
   const body = sanitize(readFileSync(src, 'utf8'));
-  // ⚠️ repo 那份的換行可能是 CRLF（core.autocrlf=true 會把 checkout 出來的檔改成 CRLF）
-  //    → 比對前先正規化，否則每次都會誤判成「有更新」而重寫一遍
-  const same = existsSync(dst) && readFileSync(dst, 'utf8').replace(/\r\n/g, '\n') === body;
+  const norm = s => s.replace(/\r\n/g, '\n');
+  const same = existsSync(dst) && norm(readFileSync(dst, 'utf8')) === norm(body);
   if (same) continue;
   if (!DRY) writeFileSync(dst, body, 'utf8');
   copied++;
