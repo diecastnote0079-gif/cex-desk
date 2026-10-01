@@ -81,6 +81,7 @@ if (!SIMULATE && sinceExpectedMin > WINDOW_H * 60) { log(`😴 錯過的是 ${(s
 // ── 3. 組訊息（人話：發生什麼、影響什麼、下一步）──
 const lines = [];
 lines.push('🔔 CeX 系統異常：電腦沒有回報');
+if (SIMULATE) lines.push('（⚠️ 驗收測試：假裝電腦 48 小時沒回報，不是真的壞掉）');
 lines.push('');
 lines.push(`應該在：${fmtMyt(expected)}（馬來西亞時間）完成一次抓取＋發布`);
 lines.push(lastGoodMs === null ? '實際上：從來沒有成功回報過' : `實際上：最後一次成功是 ${fmtMyt(lastGoodMs)}（${ageH} 小時前）`);
