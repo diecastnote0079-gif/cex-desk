@@ -97,7 +97,7 @@
   <header>
     <div class="title">
       <h1>CeX</h1>
-      <span class="tag" id="ver">uiv9</span>
+      <span class="tag" id="ver">uiv10</span>
       <span class="spacer"></span>
       <button class="sync" id="sync">同步遊戲片</button>
     </div>
@@ -494,6 +494,9 @@ function paintMeta(extra) {
   } else {
     parts.push('本機：<b>尚未同步</b>');
   }
+  // 診斷燈（2026-10-01）：一眼看出「與電腦共用的規則模組」有沒有載入。
+  // ✗＝模組沒載入（多半是快取舊版或副檔名/MIME 問題）→ 這時手機不會自己算變動。
+  parts.push(window.CexDiff ? '規則模組 ✓' : '規則模組 ✗');
   if (CHANGES && CHANGES.generatedAt) parts.push('變動帳 ' + agoText(CHANGES.generatedAt));
   setMeta((extra ? extra + '<br>' : '') + parts.join('　·　'));
 }
