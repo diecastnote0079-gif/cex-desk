@@ -97,7 +97,7 @@
   <header>
     <div class="title">
       <h1>CeX</h1>
-      <span class="tag" id="ver">uiv11</span>
+      <span class="tag" id="ver">uiv12</span>
       <span class="spacer"></span>
       <button class="sync" id="sync">同步遊戲片</button>
     </div>
@@ -437,6 +437,13 @@ async function doSync() {
       }
     });
     var rec = { at: new Date().toISOString(), cols: res.cols, items: res.items };
+    // 🧪 測試開關（2026-10-01）：`?half=1` → 只留 30% 的資料，模擬「抓取中斷」。
+    //    只為了驗「完整性守門」有沒有作用，不是正常路徑（正常使用不會帶這個參數）。
+    if (location.search.indexOf('half=1') >= 0) {
+      var cutN = Math.floor(res.items.length * 0.3);
+      console.warn('[TEST] half=1：只留 ' + cutN + ' 筆（原本 ' + res.items.length + ' 筆）');
+      res.items = res.items.slice(0, cutN);
+    }
     var prev = null;
     try { prev = await IDB.get('games'); } catch (e) { prev = null; }
     // ⭐ 完整性守門（2026-10-01）：抓到的筆數明顯少於上次 → 研判抓取中斷。
