@@ -42,6 +42,9 @@ const gitEnv = () => {
     env.GIT_CONFIG_KEY_0 = 'http.extraheader';
     env.GIT_CONFIG_VALUE_0 = 'AUTHORIZATION: basic ' + Buffer.from(`x-access-token:${token}`).toString('base64');
   }
+  // ⚠️ 2026-10-01：沒有憑證時 git 會卡在等認證（今天 08:30 的排程就是這樣掛掉）。禁止互動＋逾時。
+  env.GIT_TERMINAL_PROMPT = '0';
+  env.GCM_INTERACTIVE = 'never';
   return env;
 };
 
@@ -133,7 +136,7 @@ git(['commit', '--amend', '-m', `data: 最新資料 ${utcNow()}（${items.length
 log('已 amend 成單一 commit。');
 if (!PUSH) { log('--no-push：不推。'); process.exit(0); }
 try {
-  git(['push', '--force', 'origin', `HEAD:${BRANCH}`], { env: gitEnv(), stdio: 'pipe' });
+  git(['push', '--force', 'origin', `HEAD:${BRANCH}`], { env: gitEnv(), stdio: 'pipe', timeout: 60000 });
   log('✅ 已推上 GitHub Pages 的資料分支。');
 } catch (e) {
   console.error(`❌ 推送失敗：${String(e.stderr || e.stdout || e.message).slice(0, 400)}`);

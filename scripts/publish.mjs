@@ -84,6 +84,11 @@ const gitEnv = () => {
     env.GIT_CONFIG_KEY_0 = 'http.extraheader';
     env.GIT_CONFIG_VALUE_0 = 'AUTHORIZATION: basic ' + Buffer.from(`x-access-token:${token}`).toString('base64');
   }
+  // ⚠️ 2026-10-01：沒有憑證時 git 會**卡在等認證**（今天 08:30 的排程就是這樣掛到被排程殺掉，
+  //    一掛就是好幾個小時、還留著一堆殘留程序）。一律禁止互動＋逾時：
+  //    寧可 60 秒內失敗（會觸發告警、下一輪自動補發），也不要無聲地卡住。
+  env.GIT_TERMINAL_PROMPT = '0';
+  env.GCM_INTERACTIVE = 'never';
   return env;
 };
 git(['add', '-A', '.'], { env: gitEnv() });   // 整個 repo（含 README、workflow、scripts、state）
@@ -97,10 +102,10 @@ git(['commit', '-m', `pc: 心跳 ${heartbeat.lastGoodRun}（${heartbeat.items} �
 log('已 commit。');
 
 if (!PUSH) { log('--no-push：不推。'); process.exit(0); }
-try { git(['pull', '--rebase', '--autostash', 'origin', 'main'], { env: gitEnv(), stdio: 'pipe' }); }
+try { git(['pull', '--rebase', '--autostash', 'origin', 'main'], { env: gitEnv(), stdio: 'pipe', timeout: 60000 }); }
 catch (e) { log(`⚠️ pull --rebase 有狀況（繼續試著推）：${String(e.stdout || e.message).slice(0, 300)}`); }
 try {
-  git(['push', 'origin', 'HEAD:main'], { env: gitEnv(), stdio: 'pipe' });
+  git(['push', 'origin', 'HEAD:main'], { env: gitEnv(), stdio: 'pipe', timeout: 60000 });
   log('✅ 已推上 GitHub。');
 } catch (e) {
   console.error(`❌ 推送失敗：${String(e.stderr || e.stdout || e.message).slice(0, 500)}`);
