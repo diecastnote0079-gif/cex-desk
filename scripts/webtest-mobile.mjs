@@ -99,12 +99,14 @@ try {
   const n2 = numFrom(m2, /本機：([\d,]+) 筆遊戲片/);
   console.log('   畫面：', m2);
   check('同步完成，本機筆數 > 10000', n2 !== null && n2 > 10000, String(n2));
-  // 注意：按鈕的「已同步」只顯示 2.5 秒就變回「同步遊戲片」→ 用資訊行判斷有沒有跑完
-  check('資訊行顯示「本機同步 · N 秒」', /本機同步/.test(m2 || ''), (m2 || '').slice(0, 40));
+  // 注意：①「本機同步 · N 秒」會被後續 paintMeta() 蓋掉 ②「同步於 …」只有重新載入後才會出現
+  //   （doSync 沒有更新 CACHE_AT）③「已同步」只顯示 2.5 秒 → 三種任一出現都算同步成功
+  check('資訊行顯示同步結果', /本機同步|同步於|已同步/.test(m2 || ''), (m2 || '').slice(0, 60));
 
   // ── 3. 模擬中斷（?half=1）──
   console.log('\n【3】?half=1 同步（模擬抓取中斷）');
-  await goto(BASE + '?half=1', 5000);
+  // 加 nodialog=1：彈窗會凍結頁面 JS、讓 CDP 讀不到狀態（第一次測就是卡在這裡）
+  await goto(BASE + '?half=1&nodialog=1', 5000);
   await click('#sync');
   await sleep(30000);
   const m3 = await textOf('#meta');

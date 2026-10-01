@@ -97,7 +97,7 @@
   <header>
     <div class="title">
       <h1>CeX</h1>
-      <span class="tag" id="ver">uiv14</span>
+      <span class="tag" id="ver">uiv15</span>
       <span class="spacer"></span>
       <button class="sync" id="sync">同步遊戲片</button>
     </div>
@@ -454,7 +454,11 @@ async function doSync() {
       bar.style.display = 'none';
       btn.className = 'sync';
       btn.textContent = '抓取不完整';
-      alert('這次只抓到 ' + res.items.length + ' 筆，比上次（' + prev.items.length + ' 筆）少太多，研判是中斷。\n\n已保留上次的基準，不產生任何變動紀錄（舊資料沒有被蓋掉）。');
+      // 🧪 `?nodialog=1`：自動化測試用（彈窗會凍結頁面 JS，讓 CDP 讀不到狀態）。
+      //    正常使用不帶這個參數 → 視窗照跳。
+      if (location.search.indexOf('nodialog=1') < 0) {
+        alert('這次只抓到 ' + res.items.length + ' 筆，比上次（' + prev.items.length + ' 筆）少太多，研判是中斷。\n\n已保留上次的基準，不產生任何變動紀錄（舊資料沒有被蓋掉）。');
+      }
       render();
       return;
     }
