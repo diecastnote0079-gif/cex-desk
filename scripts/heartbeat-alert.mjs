@@ -23,7 +23,7 @@
 //
 // ⚠️ 刻意**不**抽共用模組：送 Telegram 只有 8 行、變動頻率趨近 0，
 //    抽出去反而要動 cloud-fallback.mjs 這支正在工作的關鍵腳本 → 風險大於收益。
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { sendTelegram, reportSend } from './notify.mjs';
 
@@ -62,6 +62,35 @@ if (SIMULATE) {
   lastGoodMs = NOW.getTime() - 48 * 3600e3;
   log('（--simulate-stale：假裝心跳是 48 小時前）');
 }
+// ── 1b. 兩份實作漂移？（SQL vs 共用規則；PC 的 daily 算好、publish 夾進心跳）──
+// 同一組 run **只叫一次**（記在 state/parity-alerted.json，由 workflow 的「提交狀態」一起 commit）。
+const par = hb?.parity;
+if (par && par.ok === false && !SIMULATE) {
+  const markFile = join(REPO, 'state', 'parity-alerted.json');
+  const mark = readJson(markFile);
+  if (mark && mark.runCur === par.runCur) {
+    log(`漂移已通報過（run ${par.runCur}）→ 不重複叫。`);
+  } else {
+    const d = (par.diffs || []).map(x => `${x.event}：SQL=${x.sql}／JS=${x.js}`).join('、');
+    const lines2 = [
+      '🔔 CeX 變動判定「兩份實作」對不上（漂移）',
+      '',
+      `比對組：${par.runPrev} → ${par.runCur}`,
+      `差異：${d || '(未提供明細)'}`,
+      '',
+      '意義：電腦（SQL）和手機（共用規則）算出來的變動數會不一樣 → 手機那份不可信。',
+      '下一步：下一輪會再對一次；若持續不一致，要修規則（ledger-core.mjs 與 ledger.mjs 的對應）。',
+    ];
+    console.log('\n===== Telegram 訊息預覽（漂移）=====\n' + lines2.join('\n') + '\n');
+    if (!DRY) {
+      reportSend(log, await sendTelegram(lines2.join('\n')));
+      try { writeFileSync(markFile, JSON.stringify({ runCur: par.runCur, at: NOW.toISOString() }, null, 1) + '\n'); } catch (e) { log('⚠️ 記號寫不進去：' + e.message); }
+    }
+    console.log('ALERT_SUMMARY ' + JSON.stringify({ alert: true, kind: 'parity-drift', runCur: par.runCur, diffs: par.diffs }));
+    process.exit(2);
+  }
+}
+
 const ageH = lastGoodMs ? +((NOW.getTime() - lastGoodMs) / 3600e3).toFixed(1) : null;
 const fmtMyt = ms => new Date(ms + MYT_OFFSET).toISOString().slice(0, 16).replace('T', ' ') + ' MYT';
 

@@ -16,7 +16,7 @@ import { execFileSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, readdirSync, writeFileSync, existsSync, statSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { openDb, recentRuns, utcNow } from './cex-db.mjs';
+import { openDb, recentRuns, utcNow, CEX_HOME } from './cex-db.mjs';
 import { sendTelegram, reportSend } from './notify.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -63,6 +63,13 @@ for (const f of files) {
 log(`腳本同步：${copied} 支有更新（共 ${files.length} 支；已消毒個人字樣）`);
 
 // ── 2. 寫心跳（雲端備援唯一的判斷依據）──
+// 兩份實作對帳結果（ledger-parity.mjs 寫的 parity.json）夾進心跳，雲端才有辦法知道有沒有漂移
+function readParity() {
+  try {
+    const p = JSON.parse(readFileSync(join(CEX_HOME, 'parity.json'), 'utf8'));
+    return { ok: !!p.ok, at: p.at, runPrev: p.runPrev, runCur: p.runCur, diffs: p.diffs || [] };
+  } catch { return null; }
+}
 const db = openDb();
 const [last] = recentRuns(db, 'web', 1);
 if (!last) { console.error('❌ 資料庫裡沒有 web 範圍的 run，無法寫心跳（先跑 node cex.mjs daily）'); process.exit(3); }
@@ -71,6 +78,7 @@ const heartbeat = {
   lastGoodRun: new Date(last.started_at).toISOString().replace(/\.\d+Z$/, 'Z'),
   scope: 'web', runId: last.run_id, items: last.items,
   writtenAt: utcNow(), note: '本機 PC 每天 08:30／20:00 寫入',
+  parity: readParity(),   // 兩份實作對帳結果（SQL vs 共用規則）；雲端告警器會看這個
 };
 if (!DRY) {
   mkdirSync(join(REPO, 'state'), { recursive: true });

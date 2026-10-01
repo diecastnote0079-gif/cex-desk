@@ -89,6 +89,13 @@ switch (cmd) {
       log(`mirror 完成：${last}`);
       const lg = execFileSync(process.execPath, [join(HERE, 'ledger.mjs'), '--scope', scope], { encoding: 'utf8' });
       log(`ledger：${lg.trim().split(/\r?\n/).slice(-2).join(' | ')}`);
+      // 兩份實作對帳（SQL vs 共用規則 ledger-core.mjs）：結果由 publish 帶進心跳 → 雲端才看得到
+      try {
+        const par = execFileSync(process.execPath, [join(HERE, 'ledger-parity.mjs'), '--scope', scope, '--quiet'], { encoding: 'utf8' });
+        log(`parity：${par.trim().split(/\r?\n/).slice(-1)[0]}`);
+      } catch (e) {
+        log(`🔴 parity 發現漂移（SQL 與共用規則不一致）：${String(e.stdout || e.stderr || e.message).slice(-300)}`);
+      }
       const dc = execFileSync(process.execPath, [join(HERE, 'doctor.mjs')], { encoding: 'utf8' });
       log(`doctor：${dc.trim().replace(/\s+/g, ' ')}`);
       // 發佈心跳＋腳本給雲端備援（cex-desk repo）。失敗不影響本機——本機才是主力。
