@@ -16,6 +16,7 @@
   :root{
     --bg:#0f1115; --card:#171a21; --card2:#1e222b; --line:#262b36;
     --fg:#e9edf5; --dim:#8b93a5; --accent:#4da3ff; --good:#5ddc9a; --warn:#ffb454; --bad:#ff6b6b;
+    --purple:#b98bff; --teal:#3fd0c9;
     --radius:14px; --tap:44px;
   }
   *{box-sizing:border-box}
@@ -84,6 +85,9 @@
   .ev.SOLD_OUT,.ev.GONE{background:rgba(255,107,107,.16);color:var(--bad)}
   .ev.PRICE_DOWN{background:rgba(77,163,255,.16);color:var(--accent)}
   .ev.PRICE_UP{background:rgba(255,180,84,.16);color:var(--warn)}
+  .ev.QTY_UP{background:rgba(93,220,154,.16);color:var(--good)}
+  .ev.QTY_DOWN{background:rgba(185,139,255,.16);color:var(--purple)}
+  .ev.RESTOCK{background:rgba(63,208,201,.16);color:var(--teal)}
   .chg .txt{flex:1 1 auto;min-width:0;font-size:14px;line-height:1.4;word-break:break-word}
   .chg .txt .n{font-size:11.5px;color:var(--dim);margin-top:3px}
   footer{margin-top:22px;font-size:11.5px;color:var(--dim);line-height:1.8;text-align:center}
@@ -97,7 +101,7 @@
   <header>
     <div class="title">
       <h1>CeX</h1>
-      <span class="tag" id="ver">uiv15</span>
+      <span class="tag" id="ver">uiv16</span>
       <span class="spacer"></span>
       <button class="sync" id="sync">同步遊戲片</button>
     </div>
@@ -107,7 +111,7 @@
 
   <div class="tabs" role="tablist">
     <button data-tab="all" class="on">瀏覽</button>
-    <button data-tab="new">新上架</button>
+    <button data-tab="new">進貨</button>
     <button data-tab="chg">變動</button>
   </div>
 
@@ -193,6 +197,12 @@ var IDB = {
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
 function fmtRM(n) { return 'RM' + (Number.isInteger(n) ? n : Number(n).toFixed(2)); }
 function dmy(t) { var s = String(t || '').slice(0, 10); return s ? s.slice(2).replace(/-/g, '/') : ''; }
+// ⚠️ 變動帳的 `t` 是 UTC（結尾帶 Z）；`first`（首次上架）已經是馬來西亞時間 → 兩個要分開處理
+function dmyUtc(t) {
+  var d = Date.parse(String(t || ''));
+  if (isNaN(d)) return '';
+  return new Date(d + 8 * 3600e3).toISOString().slice(2, 10).replace(/-/g, '/');
+}
 function hoursAgo(t) { var d = Date.parse(String(t || '').replace(' ', 'T')); return isNaN(d) ? null : (Date.now() - d) / 3600e3; }
 function agoText(iso) {   // ⚠️ 不要剝掉結尾的 Z，否則會被當成本地時間、少算 8 小時
   var d = Date.parse(iso);
@@ -304,6 +314,68 @@ function itemRow(i) {
 }
 
 var EVLABEL = { NEW: '新上架', GONE: '消失', SOLD_OUT: '賣光', RESTOCK: '回架', QTY_UP: '庫存+', QTY_DOWN: '庫存−', PRICE_UP: '漲價', PRICE_DOWN: '降價', STORE_CHANGE: '分店變動' };
+
+/* ── 「進貨」＝這一輪 CeX 收進了什麼：新 SKU／回架／庫存+ ── */
+var IN_LABEL = { NEW: '新 SKU', RESTOCK: '回架', QTY_UP: '庫存+' };
+// 排序權重：新 SKU 最稀有放最前，其次回架，最後庫存+（社群慣例：回架不該混在全新品裡）
+var IN_ORDER = { NEW: 0, RESTOCK: 1, QTY_UP: 2 };
+function isGameCat(cat) { return /Games/i.test(String(cat || '')); }
+
+function inRows() {
+  // 「進貨」固定用**電腦發布**的那份（累積的帳、涵蓋全部品類）。
+  // 不用手機自己算的——那個只涵蓋「上次同步 → 這次」，一天按兩次同步就會漏掉前一輪。
+  var rows = (CHANGES && CHANGES.rows) || [];
+  return rows.filter(function (r) { return !!IN_LABEL[r.event]; });
+}
+
+// 用本機快取補價格／庫存（快取只有遊戲片；其他品類查不到就留白，不假造）
+function cacheIndex() {
+  if (!CACHE) return null;
+  if (cacheIndex._src === CACHE && cacheIndex._m) return cacheIndex._m;
+  var m = {};
+  CACHE.forEach(function (i) { m[i.boxId] = i; });
+  cacheIndex._src = CACHE; cacheIndex._m = m;
+  return m;
+}
+
+function inRow(r, m) {
+  var it = m ? m[r.boxId] : null;
+  var subs = [esc(r.cat || '—')];
+  if (it) {
+    if (it.price > 0) subs.push(fmtRM(it.price));
+    subs.push('庫存 ' + it.qty);
+    if (it.cash > 0) subs.push('買取 ' + fmtRM(it.cash));
+  }
+  subs.push('#' + esc(r.boxId));
+  return '<div class="chg"><span class="ev ' + esc(r.event) + '">' + esc(IN_LABEL[r.event] || r.event) + '</span>' +
+    '<div class="txt">' + esc(r.name || r.boxId) + '<div class="n">' + subs.join('　') + '</div></div></div>';
+}
+
+function renderIncoming() {
+  var rows = inRows();
+  if (!CHANGES) return '<div class="empty">進貨帳載入中…</div>';
+  var gN = rows.filter(function (r) { return isGameCat(r.cat); }).length;
+  var hd = '<div class="chghd">☁ <b>CeX 進貨紀錄</b>（' + rows.length + ' 筆，其中遊戲片 ' + gN +
+    ' 筆）<div class="n">新 SKU／回架／庫存+｜遊戲片排最前｜來自電腦發布的帳，涵蓋全部品類</div></div>';
+  if (!rows.length) return hd + '<div class="empty">目前沒有進貨紀錄。<br><span style="opacity:.72;font-size:12px">CeX 一天進的貨本來就少，這是正常的（空手而回是常態）。</span></div>';
+  var m = cacheIndex();
+  var byDay = {};
+  rows.forEach(function (r) { var d = dmyUtc(r.t) || '—'; (byDay[d] = byDay[d] || []).push(r); });
+  return hd + Object.keys(byDay).sort(function (a, b) { return b.localeCompare(a); }).map(function (d) {
+    // ① 遊戲片在最前（這是我們的本業）② 新 SKU → 回架 → 庫存+ ③ 名稱
+    var arr = byDay[d].slice().sort(function (a, b) {
+      var ga = isGameCat(a.cat) ? 0 : 1, gb = isGameCat(b.cat) ? 0 : 1;
+      if (ga !== gb) return ga - gb;
+      var ea = IN_ORDER[a.event], eb = IN_ORDER[b.event];
+      ea = ea === undefined ? 9 : ea; eb = eb === undefined ? 9 : eb;
+      if (ea !== eb) return ea - eb;
+      return String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hant');
+    });
+    return '<div class="dayhd">' + d + '（' + byDay[d].length + ' 筆）</div>' +
+      arr.map(function (r) { return inRow(r, m); }).join('');
+  }).join('');
+}
+
 function renderChanges() {
   // 來源優先序：① 手機自己算的（有基準時）② 電腦發布的變動帳（只有第一次當種子用）
   var local = (LOC_CHANGES && LOC_CHANGES.rows) ? LOC_CHANGES : null;
@@ -326,7 +398,7 @@ function renderChanges() {
   }
   if (!rows.length) return hd + '<div class="empty">相對上次同步，<b>沒有任何變動</b>。<br><span style="opacity:.72;font-size:12px">CeX 一天動的筆數本來就少，這是正常的（空手而回是常態）。</span></div>';
   var byDay = {};
-  rows.forEach(function (r) { var d = dmy(r.t) || '—'; (byDay[d] = byDay[d] || []).push(r); });
+  rows.forEach(function (r) { var d = dmyUtc(r.t) || '—'; (byDay[d] = byDay[d] || []).push(r); });
   return hd + Object.keys(byDay).map(function (d) {
     return '<div class="dayhd">' + d + '（' + byDay[d].length + ' 筆）</div>' + byDay[d].map(function (r) {
       return '<div class="chg"><span class="ev ' + esc(r.event) + '">' + (EVLABEL[r.event] || esc(r.event)) + '</span>' +
@@ -343,6 +415,11 @@ function render() {
   if (S.tab === 'chg') {
     $('#ctrls').style.display = 'none';
     list.innerHTML = renderChanges();
+    return;
+  }
+  if (S.tab === 'new') {
+    $('#ctrls').style.display = 'none';
+    list.innerHTML = renderIncoming();
     return;
   }
   $('#ctrls').style.display = '';
@@ -550,7 +627,7 @@ async function boot() {
 
   // 變動帳（背景載入，不擋首屏）
   fetch('changes.json', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; })
-    .then(function (j) { CHANGES = j; paintMeta(); if (S.tab === 'chg') render(); })
+    .then(function (j) { CHANGES = j; paintMeta(); if (S.tab === 'chg' || S.tab === 'new') render(); })
     .catch(function () {});
 }
 
