@@ -87,6 +87,9 @@
   .chg .txt{flex:1 1 auto;min-width:0;font-size:14px;line-height:1.4;word-break:break-word}
   .chg .txt .n{font-size:11.5px;color:var(--dim);margin-top:3px}
   footer{margin-top:22px;font-size:11.5px;color:var(--dim);line-height:1.8;text-align:center}
+.chghd{padding:10px 12px;font-size:13px;line-height:1.5;color:var(--dim);border-bottom:1px solid var(--line)}
+.chghd .n{font-size:12px;opacity:.8;margin-top:2px}
+.chghd.warn{color:#8a5300;background:rgba(255,193,7,.14)}
 </style>
 </head>
 <body>
@@ -141,6 +144,13 @@
 
 <script src="cex.js"></script>
 <script src="menu.js"></script>
+<!-- 變動判定規則：與電腦端**同一份檔**（ledger-core.mjs，發布時複製成 .js——.mjs 在部分伺服器會被 MIME 擋掉）。
+     用 module 載入（deferred）→ 解析完才執行，所以下面的 inline 腳本會先檢查 window.CexDiff。 -->
+<script type="module">
+  import { diffRows, countByEvent } from './ledger-core.js';
+  window.CexDiff = { diffRows: diffRows, countByEvent: countByEvent };
+  console.log('[CeX] 共用規則模組已載入（ledger-core.js）');
+</script>
 <script>
 (function () {
 'use strict';
@@ -295,8 +305,22 @@ function itemRow(i) {
 
 var EVLABEL = { NEW: '新上架', GONE: '消失', SOLD_OUT: '賣光', RESTOCK: '回架', QTY_UP: '庫存+', QTY_DOWN: '庫存−', PRICE_UP: '漲價', PRICE_DOWN: '降價', STORE_CHANGE: '分店變動' };
 function renderChanges() {
-  var rows = (CHANGES && CHANGES.rows) || [];
-  if (!rows.length) return '<div class="empty">還沒有變動紀錄。<br>每天電腦抓完就會累積。</div>';
+  // 來源優先序：① 手機自己算的（有基準時）② 電腦發布的變動帳（只有第一次當種子用）
+  var local = (LOC_CHANGES && LOC_CHANGES.rows) ? LOC_CHANGES : null;
+  var rows = (local ? local.rows : (CHANGES && CHANGES.rows)) || [];
+  var hd = '';
+  if (LOC_META && LOC_META.incomplete) {
+    hd += '<div class="chghd warn">⚠️ 上次同步只抓到 ' + LOC_META.now + ' 筆（比上次 ' + LOC_META.prev +
+      ' 筆少太多）→ 研判抓取中斷，已沿用舊資料、<b>沒有產生任何變動</b>。</div>';
+  }
+  if (local && LOC_META) {
+    hd += '<div class="chghd">📱 <b>手機自己算的</b>：相對 ' + (LOC_META.prevAt ? dmy(LOC_META.prevAt) : '上次') +
+      ' 的差異（' + rows.length + ' 筆）<div class="n">上次 ' + (LOC_META.from || '?') + ' 筆 → 這次 ' + (LOC_META.to || '?') +
+      ' 筆｜只涵蓋遊戲片，不含「分店變動」與「狀態變動」</div></div>';
+  } else if (CHANGES && CHANGES.rows) {
+    hd += '<div class="chghd">☁ 這是<b>電腦發布</b>的變動帳（手機還沒有自己的基準——按一次「同步遊戲片」就會開始自己算）</div>';
+  }
+  if (!rows.length) return hd + '<div class="empty">還沒有變動紀錄。<br>按「同步遊戲片」就會開始累積。</div>';
   var byDay = {};
   rows.forEach(function (r) { var d = dmy(r.t) || '—'; (byDay[d] = byDay[d] || []).push(r); });
   return Object.keys(byDay).map(function (d) {
@@ -409,8 +433,38 @@ async function doSync() {
       }
     });
     var rec = { at: new Date().toISOString(), cols: res.cols, items: res.items };
+    var prev = null;
+    try { prev = await IDB.get('games'); } catch (e) { prev = null; }
+    // ⭐ 完整性守門（2026-10-01）：抓到的筆數明顯少於上次 → 研判抓取中斷。
+    //   這種時候**絕不更新基準、也不產生變動**——否則半份資料會被誤報成幾千筆「消失」（假數字）。
+    if (prev && prev.items && prev.items.length && res.items.length < prev.items.length * 0.9) {
+      LOC_META = { at: new Date().toISOString(), incomplete: true, now: res.items.length, prev: prev.items.length };
+      await IDB.set('loc_meta', LOC_META);
+      bar.style.display = 'none';
+      btn.className = 'sync';
+      btn.textContent = '抓取不完整';
+      alert('這次只抓到 ' + res.items.length + ' 筆，比上次（' + prev.items.length + ' 筆）少太多，研判是中斷。\n\n已保留上次的基準，不產生任何變動紀錄（舊資料沒有被蓋掉）。');
+      render();
+      return;
+    }
+    if (prev && prev.items && prev.items.length) { await IDB.set('games_prev', prev); }
     await IDB.set('games', rec);
     CACHE = toRows(res.cols, res.items);
+    // ⭐ 自己算變動——用與電腦**同一份規則**（ledger-core.mjs），只算手機拿得到的欄位
+    try {
+      if (prev && prev.items && prev.items.length && window.CexDiff) {
+        var evs = window.CexDiff.diffRows(toRows(prev.cols, prev.items), CACHE, { fields: { stores: false, status: false } });
+        var crow = evs.map(function (e) {
+          return { t: new Date().toISOString().slice(0, 19) + 'Z', event: e.event, boxId: e.boxId, name: e.name, cat: e.cat, old: e.oldValue, new: e.newValue };
+        });
+        LOC_CHANGES = { rows: crow };
+        LOC_META = { at: new Date().toISOString(), prevAt: prev.at, from: prev.items.length, to: res.items.length, n: crow.length };
+        await IDB.set('loc_changes', LOC_CHANGES);
+        await IDB.set('loc_meta', LOC_META);
+      } else if (!window.CexDiff) {
+        console.warn('共用規則模組還沒載入 → 這一輪不算變動');
+      }
+    } catch (e) { console.warn('本機變動計算失敗', e); }
     S.live = null;
     btn.textContent = '已同步';
     bar.firstChild.style.width = '100%';
@@ -444,6 +498,8 @@ function paintMeta(extra) {
   setMeta((extra ? extra + '<br>' : '') + parts.join('　·　'));
 }
 var CACHE_AT = null;
+var LOC_CHANGES = null;   // 手機自己算的變動（IDB loc_changes）
+var LOC_META = null;      // 它的基準資訊（IDB loc_meta）：相對哪一次、筆數、是否不完整
 
 /* ── 啟動 ── */
 async function boot() {
@@ -454,6 +510,9 @@ async function boot() {
       CACHE = toRows(rec.cols, rec.items);
       CACHE_AT = rec.at;
     }
+    // 手機自己算的變動（有就用它，沒有才退回電腦發布的那份）
+    var lc = await IDB.get('loc_changes');
+    if (lc && lc.rows) { LOC_CHANGES = lc; LOC_META = await IDB.get('loc_meta'); }
   } catch (e) { console.warn('本機快取讀取失敗', e); }
   paintMeta();
   render();

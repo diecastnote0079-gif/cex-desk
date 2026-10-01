@@ -62,6 +62,25 @@ for (const f of files) {
 }
 log(`腳本同步：${copied} 支有更新（共 ${files.length} 支；已消毒個人字樣）`);
 
+// ── 1b. 共用規則模組也要放進 web/（手機頁載入「同一個檔」）──
+// publish-web.mjs 會把 repo 的 web/ 整個複製到 data 分支根目錄 → 手機頁就能 import 它。
+// 這樣「電腦算的」和「手機算的」是同一份規則，不是兩份抄來抄去。
+// ⚠️ 檔名刻意從 `ledger-core.mjs` 改成 **`ledger-core.js`**：`.mjs` 在部分伺服器會被當成
+//    `application/octet-stream` → 瀏覽器以 MIME 為由拒絕載入 module；`.js` 到處都吃得下。
+//    內容一樣是 ESM（瀏覽器不看副檔名，只看 MIME）。
+const coreName = 'ledger-core.mjs';
+const webDir = join(REPO, 'web');
+if (existsSync(join(HERE, coreName)) && existsSync(webDir)) {
+  const body = sanitize(readFileSync(join(HERE, coreName), 'utf8'));
+  const dst = join(webDir, 'ledger-core.js');
+  const norm2 = s => s.replace(/\r\n/g, '\n');
+  const same = existsSync(dst) && norm2(readFileSync(dst, 'utf8')) === norm2(body);
+  if (same) log(`共用規則模組：web/ledger-core.js 已是最新。`);
+  else { if (!DRY) writeFileSync(dst, body, 'utf8'); log(`共用規則模組 → web/ledger-core.js（手機頁載入用）`); }
+} else if (!existsSync(webDir)) {
+  log(`⚠️ 找不到 ${webDir} → 手機頁拿不到共用規則模組。`);
+}
+
 // ── 2. 寫心跳（雲端備援唯一的判斷依據）──
 // 兩份實作對帳結果（ledger-parity.mjs 寫的 parity.json）夾進心跳，雲端才有辦法知道有沒有漂移
 function readParity() {
