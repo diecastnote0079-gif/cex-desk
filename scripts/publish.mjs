@@ -27,7 +27,12 @@ const REPO = argOf('repo', 'D:\\AI\\cex-desk');
 const DRY = has('dry-run');
 const PUSH = !has('no-push');
 const log = m => console.log(`[${utcNow()}] ${m}`);
-const git = (args, opts = {}) => execFileSync('git', ['-C', REPO, ...args], { encoding: 'utf8', ...opts });
+// ⚠️ 2026-10-01：**沒有 token 時直接把 credential helper 清掉**（`-c credential.helper=`，
+//    空值＝清空清單）。不這樣做的話 git 會卡在等認證——今天 08:30 的排程就是這樣掛了 5 小時 15 分，
+//    最後被排程殺掉、還留下 8 個孤兒程序。清掉之後它會**立刻**失敗，交給告警與下一輪自動補發。
+//    （用參數而不是環境變數：Windows 上「空值的環境變數」會等於沒有那個變數，傳不進去。）
+const credArgs = () => (process.env.GITHUB_TOKEN ? [] : ['-c', 'credential.helper=']);
+const git = (args, opts = {}) => execFileSync('git', ['-C', REPO, ...credArgs(), ...args], { encoding: 'utf8', ...opts });
 
 if (!existsSync(join(REPO, '.git'))) {
   console.error(`❌ ${REPO} 不是 git repo。先 clone：\n   git clone https://github.com/diecastnote0079-gif/cex-desk.git "${REPO}"`);
@@ -79,14 +84,12 @@ if (DRY) { log('--dry-run：不 commit。'); process.exit(0); }
 const gitEnv = () => {
   const env = { ...process.env };
   const token = process.env.GITHUB_TOKEN;
-  if (token) {   // 用 GIT_CONFIG_* 注入授權，不落檔、不進命令列
+  // 2026-10-01：沒有憑證時**不要花時間等認證**（清 helper 見上面 credArgs）
+  if (token) {
     env.GIT_CONFIG_COUNT = '1';
     env.GIT_CONFIG_KEY_0 = 'http.extraheader';
     env.GIT_CONFIG_VALUE_0 = 'AUTHORIZATION: basic ' + Buffer.from(`x-access-token:${token}`).toString('base64');
   }
-  // ⚠️ 2026-10-01：沒有憑證時 git 會**卡在等認證**（今天 08:30 的排程就是這樣掛到被排程殺掉，
-  //    一掛就是好幾個小時、還留著一堆殘留程序）。一律禁止互動＋逾時：
-  //    寧可 60 秒內失敗（會觸發告警、下一輪自動補發），也不要無聲地卡住。
   env.GIT_TERMINAL_PROMPT = '0';
   env.GCM_INTERACTIVE = 'never';
   return env;

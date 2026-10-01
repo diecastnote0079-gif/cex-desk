@@ -33,16 +33,18 @@ const utcNow = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
 const log = m => console.log(`[${utcNow()}] ${m}`);
 const COLS = ['boxId', 'name', 'cat', 'price', 'cash', 'qty', 'stores', 'first'];
 
-const git = (args, opts = {}) => execFileSync('git', ['-C', WEB, ...args], { encoding: 'utf8', ...opts });
+// 沒有 token 時清掉 credential helper → 立刻失敗，不卡在等認證（同 publish.mjs 的說明）
+const credArgs = () => (process.env.GITHUB_TOKEN ? [] : ['-c', 'credential.helper=']);
+const git = (args, opts = {}) => execFileSync('git', ['-C', WEB, ...credArgs(), ...args], { encoding: 'utf8', ...opts });
 const gitEnv = () => {
   const env = { ...process.env };
   const token = process.env.GITHUB_TOKEN;
-  if (token) {   // 授權走環境變數，不寫進 remote URL、不進命令列
+  // 2026-10-01：沒有憑證時不要卡在等認證（清 helper 見上面 credArgs）
+  if (token) {
     env.GIT_CONFIG_COUNT = '1';
     env.GIT_CONFIG_KEY_0 = 'http.extraheader';
     env.GIT_CONFIG_VALUE_0 = 'AUTHORIZATION: basic ' + Buffer.from(`x-access-token:${token}`).toString('base64');
   }
-  // ⚠️ 2026-10-01：沒有憑證時 git 會卡在等認證（今天 08:30 的排程就是這樣掛掉）。禁止互動＋逾時。
   env.GIT_TERMINAL_PROMPT = '0';
   env.GCM_INTERACTIVE = 'never';
   return env;
