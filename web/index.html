@@ -97,7 +97,7 @@
   <header>
     <div class="title">
       <h1>CeX</h1>
-      <span class="tag" id="ver">uiv12</span>
+      <span class="tag" id="ver">uiv13</span>
       <span class="spacer"></span>
       <button class="sync" id="sync">同步遊戲片</button>
     </div>
@@ -518,6 +518,15 @@ var LOC_META = null;      // 它的基準資訊（IDB loc_meta）：相對哪一
 /* ── 啟動 ── */
 async function boot() {
   buildMenu();
+  // 🧪 重置開關（2026-10-01）：`?reset=1` → 清掉本機基準（games／games_prev／loc_changes／loc_meta）。
+  //    用途：驗收測試前把狀態歸零，或測試把基準弄髒時救回來。
+  if (location.search.indexOf('reset=1') >= 0) {
+    try {
+      await IDB.set('games', null); await IDB.set('games_prev', null);
+      await IDB.set('loc_changes', null); await IDB.set('loc_meta', null);
+      console.warn('[TEST] reset=1：本機基準已清空');
+    } catch (e) { console.warn('[TEST] reset 失敗', e); }
+  }
   try {
     var rec = await IDB.get('games');
     if (rec && rec.items && rec.items.length) {
