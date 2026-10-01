@@ -97,7 +97,7 @@
   <header>
     <div class="title">
       <h1>CeX</h1>
-      <span class="tag" id="ver">uiv10</span>
+      <span class="tag" id="ver">uiv11</span>
       <span class="spacer"></span>
       <button class="sync" id="sync">同步遊戲片</button>
     </div>
@@ -314,13 +314,17 @@ function renderChanges() {
       ' 筆少太多）→ 研判抓取中斷，已沿用舊資料、<b>沒有產生任何變動</b>。</div>';
   }
   if (local && LOC_META) {
-    hd += '<div class="chghd">📱 <b>手機自己算的</b>：相對 ' + (LOC_META.prevAt ? dmy(LOC_META.prevAt) : '上次') +
+    // 基準要顯示到「時間」——一天會同步好幾次，只寫日期會看不出相對哪一次
+    var when = LOC_META.prevAt
+      ? new Date(LOC_META.prevAt).toLocaleString('zh-TW', { timeZone: 'Asia/Kuala_Lumpur', hour12: false }).slice(5, 16)
+      : '上次';
+    hd += '<div class="chghd">📱 <b>手機自己算的</b>：相對 ' + when +
       ' 的差異（' + rows.length + ' 筆）<div class="n">上次 ' + (LOC_META.from || '?') + ' 筆 → 這次 ' + (LOC_META.to || '?') +
       ' 筆｜只涵蓋遊戲片，不含「分店變動」與「狀態變動」</div></div>';
   } else if (CHANGES && CHANGES.rows) {
     hd += '<div class="chghd">☁ 這是<b>電腦發布</b>的變動帳（手機還沒有自己的基準——按一次「同步遊戲片」就會開始自己算）</div>';
   }
-  if (!rows.length) return hd + '<div class="empty">還沒有變動紀錄。<br>按「同步遊戲片」就會開始累積。</div>';
+  if (!rows.length) return hd + '<div class="empty">相對上次同步，<b>沒有任何變動</b>。<br><span style="opacity:.72;font-size:12px">CeX 一天動的筆數本來就少，這是正常的（空手而回是常態）。</span></div>';
   var byDay = {};
   rows.forEach(function (r) { var d = dmy(r.t) || '—'; (byDay[d] = byDay[d] || []).push(r); });
   return Object.keys(byDay).map(function (d) {
