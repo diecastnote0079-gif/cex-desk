@@ -10,7 +10,11 @@ on:
   workflow_dispatch:
     inputs:
       force:
-        description: '忽略 24 小時心跳，強制抓一次'
+        description: '忽略心跳，強制抓一次'
+        type: boolean
+        default: false
+      simulate_stale:
+        description: '驗收用：假裝電腦 48 小時沒回報，測「告警會不會叫」'
         type: boolean
         default: false
 
@@ -33,6 +37,20 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '24'
+
+      - name: 心跳告警（死人開關）
+        # 預期 08:30／20:00 完成抓取＋發布；這步在 09:00／15:00／21:00 檢查。
+        # grace 30 分；只對「剛過去的那個預期時間」告警 → 一次停機只叫一次。
+        # 刻意獨立於下面的備援：備援負責「補資料」，這步負責「叫你」。
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SIMULATE_STALE: ${{ inputs.simulate_stale }}
+        run: |
+          ARGS=""
+          if [ "$SIMULATE_STALE" = "true" ]; then ARGS="--simulate-stale"; fi
+          node scripts/heartbeat-alert.mjs --repo "$GITHUB_WORKSPACE" $ARGS
 
       - name: 檢查心跳 → 需要的話自己抓一次 → 推播
         env:

@@ -17,6 +17,7 @@ import { copyFileSync, mkdirSync, readdirSync, writeFileSync, existsSync, statSy
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openDb, recentRuns, utcNow } from './cex-db.mjs';
+import { sendTelegram, reportSend } from './notify.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const has = n => process.argv.includes('--' + n);
@@ -104,4 +105,41 @@ try {
 } catch (e) {
   console.error(`❌ 推送失敗：${String(e.stderr || e.stdout || e.message).slice(0, 500)}`);
   process.exit(1);
+}
+
+// ── 4. 收工自我檢查：線上真的收到本機這一版嗎？（2026-10-01 補）──
+// 那天「本機 commit 了、沒 push」，整條線靜靜飄了 5 小時沒人知道。
+// 這裡推完之後**回頭讀線上的成品**（驗結果，不是驗有沒有跑完），不一致就發 Telegram 叫人。
+// ⚠️ raw.githubusercontent 有快取 → 帶 query 破快取，並重試 3 次才判定（避免誤報）。
+const RAW = 'https://raw.githubusercontent.com/diecastnote0079-gif/cex-desk';
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function readOnline(path) {
+  try {
+    const r = await fetch(`${RAW}/${path}?t=${Date.now()}`, { cache: 'no-store' });
+    return r.ok ? await r.json() : null;
+  } catch { return null; }
+}
+let verify = { ok: false, detail: '' };
+for (let i = 1; i <= 3; i++) {
+  const hbOnline = await readOnline('main/state/heartbeat.json');
+  const meta = await readOnline('data/meta.json');
+  verify = {
+    ok: hbOnline?.runId === heartbeat.runId && meta?.runId === heartbeat.runId,
+    detail: `線上心跳 run=${hbOnline?.runId ?? '讀不到'}｜線上頁面 run=${meta?.runId ?? '讀不到'}｜本機 run=${heartbeat.runId}`,
+  };
+  if (verify.ok) break;
+  if (i < 3) { log(`自我檢查第 ${i} 次不一致（${verify.detail}）→ 15 秒後重試`); await sleep(15000); }
+}
+if (verify.ok) log(`✅ 收工自我檢查：線上與本機一致（run=${heartbeat.runId}）。`);
+else {
+  log(`⚠️ 收工自我檢查沒過：${verify.detail}`);
+  reportSend(log, await sendTelegram([
+    '⚠️ CeX 發布自我檢查沒過',
+    '',
+    `本機剛推上去的是 run=${heartbeat.runId}（${heartbeat.items} 筆）`,
+    verify.detail,
+    '',
+    '代表：本機說推了，但線上讀到的還是舊的。',
+    '下一步：下一輪開跑時會自動補推；若持續沒好，維護者會手動處理。',
+  ].join('\n')));
 }

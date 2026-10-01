@@ -1,8 +1,13 @@
 // CeX 雲端備援（GitHub Actions 用）
 //
-// 角色：本機 PC 是主力（每天 08:30／20:00 抓 → 對帳 → 健康檢查）。這支只在**本機超過 24 小時
-// 沒有成功抓取**時才動：自己抓一次全站 → 跟上一次雲端存下來的狀態比對 → 發 Telegram → 更新狀態。
+// 角色：本機 PC 是主力（每天 08:30／20:00 抓 → 對帳 → 健康檢查）。這支只在**本機沒按時回報**時才動：
+// 自己抓一次全站 → 跟上一次雲端存下來的狀態比對 → 發 Telegram → 更新狀態。
 // 本機正常時它什麼都不做（連抓都不抓），所以平時不消耗任何資源。
+//
+// ⚠️ 2026-10-01 修正門檻：原本是「本機超過 24 小時沒更新」才接手，但本機排程是 12 小時一次
+//    → **單次失敗永遠等不到備援**（上次成功總在 12 小時多一點）；2026-10-01 08:30 發布被打斷就是這樣飄掉 5 小時。
+//    改成照本機節奏判斷：**12 小時＋30 分寬容＝12.5 小時**；並加「自己剛接手過就不要再抓」的保護，
+//    避免本機持續離線時每個檢查點都重複抓。（「會叫」的那個是 heartbeat-alert.mjs，兩支互相獨立。）
 //
 // 用法：
 //   node cloud-fallback.mjs                正常跑（會先看心跳）
@@ -19,6 +24,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync } from
 import { gunzipSync } from 'node:zlib';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { sendTelegram } from './notify.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const has = n => process.argv.includes('--' + n);
@@ -32,7 +38,8 @@ const LIMIT = Number(argOf('limit', 0));
 const HEARTBEAT = join(STATE, 'heartbeat.json');   // 本機 PC 的心跳（雲端只讀、不改寫）
 const BASELINE = join(STATE, 'baseline.tsv.gz');
 const CLOUD = join(STATE, 'cloud.json');           // 雲端自己的紀錄（含上次發訊時間）
-const FRESH_HOURS = Number(process.env.CEX_FRESH_HOURS || 24);
+const FRESH_HOURS = Number(process.env.CEX_FRESH_HOURS || 12.5);      // 本機節奏 12h ＋ 30 分寬容
+const MIN_GAP_HOURS = Number(process.env.CEX_MIN_GAP_HOURS || 9);     // 自己剛接手過 → 不重複抓
 const STALE_BASE_HOURS = Number(process.env.CEX_STALE_BASE_HOURS || 48);
 // 這支會進公開 repo，所以收訊對象不寫死在這裡（走 secrets；見 workflow）
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
@@ -153,13 +160,9 @@ if (DRY) log('--dry-run：不送 Telegram、不寫狀態檔。');
 else if (!notify) log('不打擾（狀態照樣更新，只是不發訊）。');
 else if (!TOKEN || !CHAT_ID) { log('⚠️ 沒有 TELEGRAM_BOT_TOKEN／TELEGRAM_CHAT_ID → 只印不送（狀態檔仍會更新）。'); }
 else {
-  const r = await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
-    method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ chat_id: CHAT_ID, text: msg, disable_web_page_preview: true }),
-  });
-  const j = await r.json();
-  sent = { ok: !!j.ok, message_id: j.result?.message_id, error: j.ok ? null : j.description };
-  log(sent.ok ? `✅ Telegram 已送出（message_id ${sent.message_id}）` : `❌ Telegram 失敗：${j.description}`);
+  const res = await sendTelegram(msg, { token: TOKEN, chatId: CHAT_ID });
+  sent = { ok: !!res.ok, message_id: res.messageId, error: res.ok ? null : res.error };
+  log(sent.ok ? `✅ Telegram 已送出（message_id ${sent.message_id}）` : `❌ Telegram 失敗：${res.error}`);
   if (!sent.ok) process.exitCode = 1;
 }
 

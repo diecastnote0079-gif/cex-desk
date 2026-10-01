@@ -63,6 +63,25 @@ switch (cmd) {
     const scope = arg('scope', 'web');
     const t0 = Date.now();
     log(`daily 開始（scope=${scope}）`);
+
+    // ── 0. 開跑前先對帳：線上落後本機就先補發（2026-10-01 補）──
+    // 上一次若死在發布（今天 08:30 就是：本機 commit 了、沒 push），這裡在下一輪開頭自動補回來，
+    // 不必等人發現。讀線上成品＝驗結果，不是驗有沒有跑完。
+    try {
+      const last = openDb().prepare(
+        'SELECT run_id FROM runs WHERE scope=? ORDER BY started_at DESC, run_id DESC LIMIT 1').get(scope);
+      const r = await fetch(`https://raw.githubusercontent.com/diecastnote0079-gif/cex-desk/data/meta.json?t=${Date.now()}`, { cache: 'no-store' });
+      const meta = r.ok ? await r.json() : null;
+      if (last && meta && meta.runId !== last.run_id) {
+        log(`⚠️ 開跑前發現線上落後（線上 run=${meta.runId}／本機 run=${last.run_id}）→ 先補發上一輪。`);
+        try {
+          run('publish.mjs'); run('publish-web.mjs');
+          log('補發完成。');
+        } catch (e) { log(`⚠️ 補發失敗（繼續本輪）：${String(e.stdout || e.stderr || e.message).slice(0, 300)}`); }
+      } else if (last && meta) {
+        log(`開跑前對帳：線上與本機一致（run=${last.run_id}）。`);
+      }
+    } catch (e) { log(`（開跑前線上對帳略過：${e.message}）`); }
     try {
       const out = execFileSync(process.execPath, [join(HERE, 'mirror.mjs'), '--scope', scope, '--load'],
         { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
