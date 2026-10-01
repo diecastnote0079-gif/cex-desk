@@ -115,39 +115,33 @@ try {
   process.exit(1);
 }
 
-// ── 4. 收工自我檢查：線上真的收到本機這一版嗎？（2026-10-01 補）──
+// ── 4. 收工自我檢查：本機這一版真的推上線了嗎？（2026-10-01 補）──
 // 那天「本機 commit 了、沒 push」，整條線靜靜飄了 5 小時沒人知道。
-// 這裡推完之後**回頭讀線上的成品**（驗結果，不是驗有沒有跑完），不一致就發 Telegram 叫人。
-// ⚠️ raw.githubusercontent 有快取 → 帶 query 破快取，並重試 3 次才判定（避免誤報）。
-const RAW = 'https://raw.githubusercontent.com/diecastnote0079-gif/cex-desk';
+// ⚠️ 驗法用 **git ls-remote 比對 commit SHA**，不要抓 raw 檔案：
+//    ① raw.githubusercontent 有 CDN 快取（可數分鐘），推完馬上看會誤報；
+//    ② 資料分支（手機頁）是 publish-web.mjs 的責任，**在這一步還沒更新**——
+//       2026-10-01 實測就在 daily 流程裡必誤報（線上頁面永遠落後一個步驟）。
+//    改成問 git 本身：零延遲、零快取、只管這支腳本自己該做的事（把 main 推上去）。
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-async function readOnline(path) {
-  try {
-    const r = await fetch(`${RAW}/${path}?t=${Date.now()}`, { cache: 'no-store' });
-    return r.ok ? await r.json() : null;
-  } catch { return null; }
-}
 let verify = { ok: false, detail: '' };
 for (let i = 1; i <= 3; i++) {
-  const hbOnline = await readOnline('main/state/heartbeat.json');
-  const meta = await readOnline('data/meta.json');
-  verify = {
-    ok: hbOnline?.runId === heartbeat.runId && meta?.runId === heartbeat.runId,
-    detail: `線上心跳 run=${hbOnline?.runId ?? '讀不到'}｜線上頁面 run=${meta?.runId ?? '讀不到'}｜本機 run=${heartbeat.runId}`,
-  };
+  const head = git(['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+  let remote = '';
+  try { remote = (git(['ls-remote', 'origin', 'refs/heads/main'], { env: gitEnv(), timeout: 30000 }).trim().split(/\s+/)[0] || ''); } catch { remote = ''; }
+  verify = { ok: !!remote && remote === head, detail: `線上 main=${remote.slice(0, 10) || '讀不到'}｜本機 HEAD=${head.slice(0, 10)}` };
   if (verify.ok) break;
-  if (i < 3) { log(`自我檢查第 ${i} 次不一致（${verify.detail}）→ 15 秒後重試`); await sleep(15000); }
+  if (i < 3) { log(`自我檢查第 ${i} 次不一致（${verify.detail}）→ 10 秒後重試`); await sleep(10000); }
 }
-if (verify.ok) log(`✅ 收工自我檢查：線上與本機一致（run=${heartbeat.runId}）。`);
+if (verify.ok) log(`✅ 收工自我檢查：main 已推上去（run=${heartbeat.runId}）。`);
 else {
   log(`⚠️ 收工自我檢查沒過：${verify.detail}`);
   reportSend(log, await sendTelegram([
     '⚠️ CeX 發布自我檢查沒過',
     '',
-    `本機剛推上去的是 run=${heartbeat.runId}（${heartbeat.items} 筆）`,
+    `本機剛推的是 run=${heartbeat.runId}（${heartbeat.items} 筆）`,
     verify.detail,
     '',
-    '代表：本機說推了，但線上讀到的還是舊的。',
+    '代表：本機說推了，但線上 main 不是這個版本。',
     '下一步：下一輪開跑時會自動補推；若持續沒好請告知。',
   ].join('\n')));
 }

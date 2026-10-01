@@ -15,6 +15,7 @@ import { existsSync, mkdirSync, copyFileSync, writeFileSync, readFileSync, rmSyn
 import { gunzipSync } from 'node:zlib';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { sendTelegram, reportSend } from './notify.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const has = n => process.argv.includes('--' + n);
@@ -143,4 +144,30 @@ try {
 } catch (e) {
   console.error(`❌ 推送失敗：${String(e.stderr || e.stdout || e.message).slice(0, 400)}`);
   process.exit(1);
+}
+
+// ── 收工自我檢查：資料分支真的換成這一版了嗎？（2026-10-01 補）──
+// 用 git ls-remote 比對 commit SHA——問 git 本身，零快取、零延遲。
+// （教訓：抓 raw 檔驗會被 CDN 快取騙；而「線上頁面 run」在 publish.mjs 那步還沒更新，不能在那裡比。）
+{
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  let ok = false, detail = '';
+  for (let i = 1; i <= 3; i++) {
+    const head = git(['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    let remote = '';
+    try { remote = (git(['ls-remote', 'origin', `refs/heads/${BRANCH}`], { env: gitEnv(), timeout: 30000 }).trim().split(/\s+/)[0] || ''); } catch { remote = ''; }
+    ok = !!remote && remote === head;
+    detail = `線上 ${BRANCH}=${remote.slice(0, 10) || '讀不到'}｜本機 HEAD=${head.slice(0, 10)}`;
+    if (ok) break;
+    if (i < 3) { log(`自我檢查第 ${i} 次不一致（${detail}）→ 10 秒後重試`); await sleep(10000); }
+  }
+  if (ok) log(`✅ 收工自我檢查：資料分支已更新（${items.length} 筆）。`);
+  else {
+    log(`⚠️ 收工自我檢查沒過：${detail}`);
+    reportSend(log, await sendTelegram([
+      '⚠️ CeX 手機頁資料自我檢查沒過', '', detail, '',
+      '代表：資料分支沒有換成這一版。',
+      '下一步：下一輪會再推一次；若持續沒好請告知。',
+    ].join('\n')));
+  }
 }
