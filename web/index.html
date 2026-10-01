@@ -59,6 +59,11 @@
   .seg button{flex:1 1 0;appearance:none;height:38px;border-radius:10px;border:1px solid var(--line);
     background:var(--card);color:var(--dim);font-size:13px;cursor:pointer}
   .seg button.on{background:var(--card2);color:var(--fg);border-color:#3a4152;font-weight:600}
+  .gbar{display:flex;align-items:center;gap:6px;margin:0 0 10px}
+  .gbar button{appearance:none;height:34px;padding:0 14px;border-radius:999px;border:1px solid var(--line);
+    background:var(--card);color:var(--dim);font-size:12.5px;cursor:pointer;white-space:nowrap}
+  .gbar button.on{background:var(--card2);color:var(--fg);border-color:#3a4152;font-weight:600}
+  .gbar .gnum{font-size:12px;color:var(--dim);margin-left:auto}
   .count{font-size:12px;color:var(--dim);margin-top:8px}
 
   .item{display:flex;gap:10px;align-items:flex-start;background:var(--card);border:1px solid var(--line);
@@ -115,6 +120,12 @@
     <button data-tab="chg">變動</button>
   </div>
 
+  <div class="gbar" id="gbar" style="display:none">
+    <button data-g="all" class="on">全部</button>
+    <button data-g="games">只看遊戲片</button>
+    <span class="gnum" id="gnum"></span>
+  </div>
+
   <div class="ctrls" id="ctrls">
     <div class="search">
       <input id="q" placeholder="搜尋遊戲名稱…" autocomplete="off" autocapitalize="off" spellcheck="false">
@@ -160,7 +171,7 @@
 'use strict';
 var $ = function (s) { return document.querySelector(s); };
 var PAGE = 100;                                   // 每批顯示幾筆（手機：<200 不必虛擬化）
-var S = { tab: 'all', q: '', g1: '', g2: '', sort: 'new', stock: 'all', shown: PAGE, live: null, liveKey: '' };
+var S = { tab: 'all', q: '', g1: '', g2: '', sort: 'new', stock: 'all', shown: PAGE, live: null, liveKey: '', gamesOnly: false };
 var CACHE = null;      // 本機遊戲片快取 {at, cols, items}
 var SNAP = null;       // 每日快照（全部商品）
 var CHANGES = null;
@@ -320,12 +331,22 @@ var IN_LABEL = { NEW: '新 SKU', RESTOCK: '回架', QTY_UP: '庫存+' };
 // 排序權重：新 SKU 最稀有放最前，其次回架，最後庫存+（社群慣例：回架不該混在全新品裡）
 var IN_ORDER = { NEW: 0, RESTOCK: 1, QTY_UP: 2 };
 function isGameCat(cat) { return /Games/i.test(String(cat || '')); }
+// 「只看遊戲片」開關（進貨／變動共用）——只影響顯示，不動資料
+function applyGameFilter(rows) {
+  return S.gamesOnly ? rows.filter(function (r) { return isGameCat(r.cat); }) : rows;
+}
+function setGnum(allRows) {
+  var el = $('#gnum'); if (!el) return;
+  var g = allRows.filter(function (r) { return isGameCat(r.cat); }).length;
+  el.textContent = S.gamesOnly ? ('遊戲片 ' + g + ' 筆') : ('遊戲片 ' + g + ' / 全部 ' + allRows.length + ' 筆');
+}
 
 function inRows() {
   // 「進貨」固定用**電腦發布**的那份（累積的帳、涵蓋全部品類）。
   // 不用手機自己算的——那個只涵蓋「上次同步 → 這次」，一天按兩次同步就會漏掉前一輪。
   var rows = (CHANGES && CHANGES.rows) || [];
-  return rows.filter(function (r) { return !!IN_LABEL[r.event]; });
+  rows = rows.filter(function (r) { return !!IN_LABEL[r.event]; });
+  return applyGameFilter(rows);
 }
 
 // 用本機快取補價格／庫存（快取只有遊戲片；其他品類查不到就留白，不假造）
@@ -352,11 +373,15 @@ function inRow(r, m) {
 }
 
 function renderIncoming() {
-  var rows = inRows();
   if (!CHANGES) return '<div class="empty">進貨帳載入中…</div>';
+  var all = (CHANGES && CHANGES.rows) || [];
+  setGnum(all.filter(function (r) { return !!IN_LABEL[r.event]; }));
+  var rows = inRows();
   var gN = rows.filter(function (r) { return isGameCat(r.cat); }).length;
-  var hd = '<div class="chghd">☁ <b>CeX 進貨紀錄</b>（' + rows.length + ' 筆，其中遊戲片 ' + gN +
-    ' 筆）<div class="n">新 SKU／回架／庫存+｜遊戲片排最前｜來自電腦發布的帳，涵蓋全部品類</div></div>';
+  var hd = '<div class="chghd">☁ <b>CeX 進貨紀錄</b>（' + rows.length + ' 筆' +
+    (S.gamesOnly ? '，只看遊戲片' : '，其中遊戲片 ' + gN + ' 筆') +
+    '）<div class="n">新 SKU／回架／庫存+' + (S.gamesOnly ? '' : '｜遊戲片排最前') +
+    '｜來自電腦發布的帳，涵蓋全部品類</div></div>';
   if (!rows.length) return hd + '<div class="empty">目前沒有進貨紀錄。<br><span style="opacity:.72;font-size:12px">CeX 一天進的貨本來就少，這是正常的（空手而回是常態）。</span></div>';
   var m = cacheIndex();
   var byDay = {};
@@ -380,6 +405,8 @@ function renderChanges() {
   // 來源優先序：① 手機自己算的（有基準時）② 電腦發布的變動帳（只有第一次當種子用）
   var local = (LOC_CHANGES && LOC_CHANGES.rows) ? LOC_CHANGES : null;
   var rows = (local ? local.rows : (CHANGES && CHANGES.rows)) || [];
+  setGnum(rows);
+  rows = applyGameFilter(rows);
   var hd = '';
   if (LOC_META && LOC_META.incomplete) {
     hd += '<div class="chghd warn">⚠️ 上次同步只抓到 ' + LOC_META.now + ' 筆（比上次 ' + LOC_META.prev +
@@ -412,17 +439,11 @@ function setMeta(html) { $('#meta').innerHTML = html; }
 
 function render() {
   var list = $('#list');
-  if (S.tab === 'chg') {
-    $('#ctrls').style.display = 'none';
-    list.innerHTML = renderChanges();
-    return;
-  }
-  if (S.tab === 'new') {
-    $('#ctrls').style.display = 'none';
-    list.innerHTML = renderIncoming();
-    return;
-  }
-  $('#ctrls').style.display = '';
+  var ledgerTab = (S.tab === 'chg' || S.tab === 'new');
+  $('#gbar').style.display = ledgerTab ? '' : 'none';
+  $('#ctrls').style.display = ledgerTab ? 'none' : '';
+  if (S.tab === 'chg') { list.innerHTML = renderChanges(); return; }
+  if (S.tab === 'new') { list.innerHTML = renderIncoming(); return; }
 
   var rows = S.live ? S.live.items : baseRows();
   if (!rows) {
@@ -661,6 +682,13 @@ document.querySelectorAll('.tabs button').forEach(function (b) {
   b.onclick = function () {
     document.querySelectorAll('.tabs button').forEach(function (x) { x.classList.toggle('on', x === b); });
     S.tab = b.dataset.tab; S.live = null; S.shown = PAGE; render();
+  };
+});
+document.querySelectorAll('#gbar button').forEach(function (b) {
+  b.onclick = function () {
+    document.querySelectorAll('#gbar button').forEach(function (x) { x.classList.toggle('on', x === b); });
+    S.gamesOnly = b.dataset.g === 'games';
+    render();
   };
 });
 $('#sync').onclick = doSync;
