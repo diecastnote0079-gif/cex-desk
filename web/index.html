@@ -97,7 +97,7 @@
   <header>
     <div class="title">
       <h1>CeX</h1>
-      <span class="tag" id="ver">uiv13</span>
+      <span class="tag" id="ver">uiv14</span>
       <span class="spacer"></span>
       <button class="sync" id="sync">同步遊戲片</button>
     </div>
@@ -327,7 +327,7 @@ function renderChanges() {
   if (!rows.length) return hd + '<div class="empty">相對上次同步，<b>沒有任何變動</b>。<br><span style="opacity:.72;font-size:12px">CeX 一天動的筆數本來就少，這是正常的（空手而回是常態）。</span></div>';
   var byDay = {};
   rows.forEach(function (r) { var d = dmy(r.t) || '—'; (byDay[d] = byDay[d] || []).push(r); });
-  return Object.keys(byDay).map(function (d) {
+  return hd + Object.keys(byDay).map(function (d) {
     return '<div class="dayhd">' + d + '（' + byDay[d].length + ' 筆）</div>' + byDay[d].map(function (r) {
       return '<div class="chg"><span class="ev ' + esc(r.event) + '">' + (EVLABEL[r.event] || esc(r.event)) + '</span>' +
         '<div class="txt">' + esc(r.name || r.boxId) +
@@ -534,8 +534,12 @@ async function boot() {
       CACHE_AT = rec.at;
     }
     // 手機自己算的變動（有就用它，沒有才退回電腦發布的那份）
+    // ⚠️ 兩個要分開還原：就算沒有 loc_changes（例如這一輪被守門攔下、沒產生變動），
+    //    loc_meta 也要還原——不然「抓取不完整」的警告會在重新載入後消失（2026-10-01 測試抓到）。
+    var lm = await IDB.get('loc_meta');
+    if (lm) LOC_META = lm;
     var lc = await IDB.get('loc_changes');
-    if (lc && lc.rows) { LOC_CHANGES = lc; LOC_META = await IDB.get('loc_meta'); }
+    if (lc && lc.rows) LOC_CHANGES = lc;
   } catch (e) { console.warn('本機快取讀取失敗', e); }
   paintMeta();
   render();
