@@ -91,7 +91,7 @@ lines.push('② 跑了但沒推上去（2026-10-01 08:30 那次就是這樣）')
 lines.push('③ 網路或 GitHub 出問題');
 lines.push('');
 lines.push(`影響：手機頁還停在 ${lastGoodMs === null ? '未知' : fmtMyt(lastGoodMs)} 那一版`);
-lines.push('下一步：電腦下次開機時維護者會補推；若持續沒動靜維護者會手動處理。');
+lines.push('下一步：下次開機時會自動補推；若一直沒動靜請告知。');
 const msg = lines.join('\n').slice(0, 3800);
 
 console.log('\n===== Telegram 訊息預覽 =====\n' + msg + '\n=============================\n');
