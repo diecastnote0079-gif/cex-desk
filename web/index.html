@@ -85,6 +85,8 @@
   .empty,.err{text-align:center;color:var(--dim);font-size:13.5px;line-height:1.8;padding:28px 12px}
   .err b{color:var(--bad)}
   .dayhd{font-size:12.5px;color:var(--dim);margin:14px 0 6px;font-weight:600}
+.dayhd.daytoggle{cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px}
+.dayhd .dn{font-size:11px;font-weight:400;opacity:.7;margin-left:auto}
   .chg{display:flex;gap:10px;align-items:flex-start;background:var(--card);border:1px solid var(--line);
     border-radius:12px;padding:9px 11px;margin-bottom:6px}
   .ev{flex:0 0 auto;font-size:11px;border-radius:6px;padding:3px 7px;background:var(--card2);color:var(--dim)}
@@ -94,7 +96,45 @@
   .ev.PRICE_UP{background:rgba(255,180,84,.16);color:var(--warn)}
   .ev.QTY_UP{background:rgba(93,220,154,.16);color:var(--good)}
   .ev.QTY_DOWN{background:rgba(185,139,255,.16);color:var(--purple)}
-  .ev.RESTOCK{background:rgba(63,208,201,.16);color:var(--teal)}
+  .ev.RESTOCK{background:rgba(63,208,201,.22);color:var(--teal);box-shadow:0 0 0 1px rgba(63,208,201,.55)}
+/* 變動：事件分組（2026-10-05） */
+.grp{margin:14px 0 6px;display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;
+     font-size:13px;font-weight:600;padding:6px 2px;border-radius:8px}
+.grp .arw{font-size:11px;color:var(--dim);width:12px;display:inline-block;flex:0 0 auto}
+.grp .cnt{font-size:12px;color:var(--dim);font-weight:400;margin-left:auto}
+.grp.closed{color:var(--dim)}
+/* 「庫存±」組內的兩顆開關 */
+.qseg{display:flex;gap:8px;margin:2px 0 8px;flex-wrap:wrap}
+.qseg button{appearance:none;height:32px;padding:0 12px;border-radius:999px;border:1px solid var(--line);
+  background:transparent;color:var(--dim);font-size:12.5px;font-family:inherit;cursor:pointer}
+.qseg button.on{background:var(--card2);color:var(--fg);border-color:#3a4152;font-weight:600}
+/* 下層切換鈕：縮排＋左側細線＋更小更淡 → 一眼看得出這是「上一排的下一層」（阿夜 2026-10-05） */
+.qseg.sub{margin:0 0 10px 14px;padding-left:10px;border-left:2px solid var(--line)}
+.qseg.sub button{height:28px;padding:0 10px;font-size:11.5px;color:var(--dim)}
+.qseg.sub button.on{font-size:11.5px;color:var(--fg)}
+/* 大分類＝L1：底線分頁式（純文字＋底線），跟下面 L2 的膠囊切開層級（阿夜 2026-10-05） */
+#gbar{flex-wrap:wrap;gap:0 14px;border-bottom:1px solid var(--line);margin-bottom:10px}
+#gbar button{appearance:none;height:auto;padding:2px 2px 8px;border:0;border-radius:0;background:none;
+  color:var(--dim);font-size:13px;font-family:inherit;cursor:pointer}
+#gbar button.on{background:none;color:var(--fg);border:0;font-weight:600;box-shadow:inset 0 -2px 0 0 var(--accent)}
+#gbar .gnum{font-size:12px;color:var(--dim);margin-left:auto;align-self:center;padding-bottom:8px}
+/* 庫存+：新庫存愈少愈亮（1＝最強、10＋淡掉） */
+.chg.q1{border-color:rgba(93,220,154,.55)}
+.chg.q1 .txt{font-weight:700}
+.chg.q2{opacity:.95}
+.chg.q3{opacity:.82}
+.chg.q4{opacity:.66}
+/* 回架：庫存+ 那組的頭牌 */
+.chg.restock{border-color:rgba(63,208,201,.7);background:rgba(63,208,201,.08)}
+.chg.restock .txt{font-weight:700}
+/* 分店變動：只顯示差異 */
+.sadd{color:var(--good)}
+.sdel{color:var(--bad)}
+.sdim{color:var(--dim);font-size:11px}
+/* 瀏覽：找漏視角標籤可以換行；今天有變動的徽章 */
+.seg{flex-wrap:wrap}
+.seg button{white-space:nowrap}
+.evbadge{margin-left:8px;font-size:11px;color:var(--warn);white-space:nowrap}
   .chg .txt{flex:1 1 auto;min-width:0;font-size:14px;line-height:1.4;word-break:break-word}
   .chg .txt .n{font-size:11.5px;color:var(--dim);margin-top:3px}
   footer{margin-top:22px;font-size:11.5px;color:var(--dim);line-height:1.8;text-align:center}
@@ -123,8 +163,12 @@
   </div>
 
   <div class="gbar" id="gbar" style="display:none">
-    <button data-g="all" class="on">全部</button>
-    <button data-g="games">只看遊戲片</button>
+    <button data-b="all" class="on">全部</button>
+    <button data-b="遊戲">遊戲</button>
+    <button data-b="遊戲機">遊戲機</button>
+    <button data-b="手機">手機</button>
+    <button data-b="電腦">電腦</button>
+    <button data-b="電器">電器</button>
     <span class="gnum" id="gnum"></span>
   </div>
 
@@ -132,11 +176,8 @@
     <button data-s="day" class="on">全天</button>
     <button data-s="sync">上次同步後</button>
     <select id="csort">
-      <option value="orig">原順序</option>
-      <option value="event">事件類型</option>
-      <option value="mag">價格變動 大→小</option>
-      <option value="price">價格 高→低</option>
-      <option value="name">名稱 A→Z</option>
+      <option value="rare">稀有優先（少→多）</option>
+      <option value="time">時間 新→舊</option>
     </select>
   </div>
 
@@ -149,6 +190,7 @@
       <select id="g1"></select>
       <select id="g2"></select>
       <select id="sort">
+        <option value="rare">稀有優先（庫存少→多）</option>
         <option value="new">首見 新→舊</option>
         <option value="price-desc">價格 高→低</option>
         <option value="price-asc">價格 低→高</option>
@@ -157,6 +199,10 @@
     </div>
     <div class="seg" id="stock">
       <button data-v="all" class="on">全部</button>
+      <button data-v="rare1">稀有·庫存1</button>
+      <button data-v="few">只有1家店</button>
+      <button data-v="new7">7天內首見</button>
+      <button data-v="today">今天有動靜</button>
       <button data-v="in">有庫存</button>
       <button data-v="out">沒庫存</button>
     </div>
@@ -185,7 +231,7 @@
 'use strict';
 var $ = function (s) { return document.querySelector(s); };
 var PAGE = 100;                                   // 每批顯示幾筆（手機：<200 不必虛擬化）
-var S = { tab: 'all', q: '', g1: '', g2: '', sort: 'new', stock: 'all', shown: PAGE, live: null, liveKey: '', gamesOnly: false, cscope: 'day', csort: 'orig' };
+var S = { tab: 'all', q: '', g1: '', g2: '', sort: 'rare', stock: 'all', shown: PAGE, live: null, liveKey: '', big: 'all', cscope: 'day', csort: 'rare', chgOpen: {}, dayOpen: {}, seg: { STOCK: 'NEW', PRICE: 'DOWN' }, inSeg: 'NEW', inNoise: false, inDayOpen: {} };
 var CACHE = null;      // 本機遊戲片快取 {at, cols, items}
 var SNAP = null;       // 每日快照（全部商品）
 var CHANGES = null;
@@ -245,19 +291,57 @@ function toRows(cols, items) {
 }
 
 /* ── 選單 ── */
+/* 分類選單
+   ⚠️ 2026-10-05 修的 bug：原本靠 `menu.js`（**2026-09-30 產生的死快照**，沒有任何腳本會更新它）
+   → 下拉裡的筆數五天前就過期了，新分類也不會出現。
+   改成**當場用手機裡剛同步下來的資料算**（CACHE），筆數永遠跟清單一致。
+   非遊戲群的舊群組保留（那些要即時查，先不動）。 */
+function buildGameGroups() {
+  var rows = CACHE || SNAP || [];
+  var byPlat = {};
+  rows.forEach(function (i) {
+    var cat = String(i.cat || '').trim();
+    if (!cat) return;
+    var m = cat.match(/^(.+?)\s+Games:\s*(.+)$/i), plat, region = '';
+    if (m) { plat = m[1].trim(); region = m[2].trim(); }
+    else if (!/Games/i.test(cat)) return;                       // 不是遊戲片就跳過（交給別的大類）
+    else plat = cat.replace(/\s*Games.*$/i, '').trim();
+    if (!plat) return;
+    var p = byPlat[plat] = byPlat[plat] || { label: plat, n: 0, ins: 0, cats: {}, children: {} };
+    p.n++; if (i.qty > 0) p.ins++;
+    p.cats[cat] = 1;
+    if (region) {
+      var c = p.children[region] = p.children[region] || { label: region, cat: cat, n: 0, ins: 0 };
+      c.n++; if (i.qty > 0) c.ins++;
+    }
+  });
+  var plats = Object.keys(byPlat).map(function (k) {
+    var p = byPlat[k];
+    return {
+      label: p.label, cats: Object.keys(p.cats), n: p.n, ins: p.ins,
+      children: Object.keys(p.children).map(function (r) { return p.children[r]; })
+    };
+  }).sort(function (a, b) { return b.n - a.n; });                // 筆數多的平台排前面
+  return { key: 'games', label: '遊戲片', platforms: plats };
+}
+
 function buildMenu() {
   var g1 = $('#g1');
+  // ⚠️ 只留「遊戲片」平台：舊 menu.js 的其他群組（電腦／電器／手機…）是**五天前的死資料**，
+  //    而且把下拉塞成一百多個選項（耳機 7000 筆、手機 5800 筆…）——那正是這頁「不合理」的地方。
+  //    其他品類要看請用進貨／變動頁的大分類（那邊是即時的）。
+  MENU = {
+    generatedAt: new Date().toISOString(),
+    // ⚠️ 2026-10-05 教訓：`gameCats` 不可以蓋掉——`doSync()` 第一行就檢查它，
+    //    蓋掉會讓「同步遊戲片」變成**按了完全沒反應**（不報錯、不提示，最難查的那種）。
+    gameCats: MENU.gameCats || [],
+    groups: [buildGameGroups()]
+  };
   var html = '<option value="">全部遊戲片</option>';
   MENU.groups.forEach(function (g) {
-    if (g.key === 'games') {
-      html += '<optgroup label="遊戲片">' + g.platforms.map(function (p) {
-        return '<option value="p:' + esc(p.label) + '">' + esc(p.label) + '（' + p.n + '）</option>';
-      }).join('') + '</optgroup>';
-    } else {
-      html += '<optgroup label="' + esc(g.label) + '">' + g.items.map(function (i) {
-        return '<option value="c:' + esc(i.cat) + '">' + esc(i.label) + '（' + i.n + '）</option>';
-      }).join('') + '</optgroup>';
-    }
+    html += '<optgroup label="遊戲片">' + g.platforms.map(function (p) {
+      return '<option value="p:' + esc(p.label) + '">' + esc(p.label) + '（' + p.n + '）</option>';
+    }).join('') + '</optgroup>';
   });
   g1.innerHTML = html;
   $('#g2').style.display = 'none';
@@ -293,6 +377,19 @@ function baseRows() {
   return null;                                          // 非遊戲片分類 → 需即時查
 }
 
+/* 今天的變動帳索引（瀏覽頁用）：boxId → 事件。只在 CHANGES 換了才重算。 */
+function todayChgMap() {
+  if (!CHANGES) return null;
+  if (todayChgMap._src === CHANGES) return todayChgMap._m;
+  var today = dmyUtc(new Date().toISOString()), m = {};
+  (CHANGES.rows || []).forEach(function (r) {
+    if (dmyUtc(r.t) !== today || m[r.boxId] !== undefined) return;
+    m[r.boxId] = r.event;
+  });
+  todayChgMap._src = CHANGES; todayChgMap._m = m;
+  return m;
+}
+
 function filtered(rows) {
   if (!rows) return [];
   var out = rows, q = S.q.trim().toLowerCase();
@@ -315,8 +412,24 @@ function filtered(rows) {
   if (q) out = out.filter(function (i) { return i._s.indexOf(q) >= 0; });
   if (S.stock === 'in') out = out.filter(function (i) { return i.qty > 0; });
   if (S.stock === 'out') out = out.filter(function (i) { return !(i.qty > 0); });
+  // 找漏視角（阿夜 2026-10-05）：稀有／只有一家店／7 天內首見／今天有動靜
+  if (S.stock === 'rare1') out = out.filter(function (i) { return i.qty === 1; });
+  if (S.stock === 'few') out = out.filter(function (i) { return i.stores === 1; });
+  if (S.stock === 'new7') {
+    var cut7 = new Date(Date.now() - 7 * 86400e3 + 8 * 3600e3).toISOString().slice(0, 19).replace('T', ' ');
+    out = out.filter(function (i) { return String(i.first || '') >= cut7; });
+  }
+  if (S.stock === 'today') {
+    var tm = todayChgMap() || {};
+    out = out.filter(function (i) { return tm[i.boxId] !== undefined; });
+  }
   var s = S.sort;
   out = out.slice().sort(function (a, b) {
+    if (s === 'rare') {                                        // 稀有優先：有庫存的由少到多，沒庫存的排最後
+      var ka = a.qty > 0 ? a.qty : 9999, kb = b.qty > 0 ? b.qty : 9999;
+      if (ka !== kb) return ka - kb;
+      return String(b.first || '').localeCompare(String(a.first || ''));
+    }
     if (s === 'price-desc') return b.price - a.price;
     if (s === 'price-asc') return a.price - b.price;
     if (s === 'name-asc') return String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hant');
@@ -327,40 +440,83 @@ function filtered(rows) {
 
 function itemRow(i) {
   var q = i.qty, cls = q <= 0 ? 'q0' : (q <= 1 ? 'q1' : '');
+  // 瘦身（2026-10-05）：小字只留「分類｜買取｜幾家店｜首見」；條碼拿掉（那是施工味）
   var subs = [esc(i.cat || '—')];
   if (i.cash > 0) subs.push('買取 ' + fmtRM(i.cash));
-  if (i.stores > 0) subs.push(i.stores + ' 家分店');
+  if (i.stores > 0) subs.push(i.stores + ' 家店');
   if (i.first) subs.push('首見 ' + dmy(i.first));
-  subs.push('#' + esc(i.boxId));
+  var tm = todayChgMap(), ev = tm ? tm[i.boxId] : null;
+  var badge = ev ? '<span class="evbadge">⚡' + esc(EVLABEL[ev] || ev) + '</span>' : '';
   return '<div class="item' + (q <= 0 ? ' out' : '') + '"><div class="main"><div class="nm">' + esc(i.name || '(無名)') + '</div>' +
-    '<div class="sub"><span>' + subs.join('</span><span>') + '</span></div></div>' +
+    '<div class="sub"><span>' + subs.join('</span><span>') + '</span>' + badge + '</div></div>' +
     '<div class="right"><div class="price">' + fmtRM(i.price) + '</div>' +
     '<div class="buy ' + cls + '">庫存 ' + q + '</div></div></div>';
 }
 
-var EVLABEL = { NEW: '新上架', GONE: '消失', SOLD_OUT: '賣光', RESTOCK: '回架', QTY_UP: '庫存+', QTY_DOWN: '庫存−', PRICE_UP: '漲價', PRICE_DOWN: '降價', STORE_CHANGE: '分店變動' };
+var EVLABEL = { NEW: '新上架', GONE: '消失', SOLD_OUT: '賣光', RESTOCK: '回架', QTY_UP: '庫存+', QTY_DOWN: '庫存−', PRICE_UP: '漲價', PRICE_DOWN: '降價', STORE_CHANGE: '分店變動', FLOOR_CHANGE: '買取價變動' };
 
 /* ── 「進貨」＝這一輪 CeX 收進了什麼：新 SKU／回架／庫存+ ── */
 var IN_LABEL = { NEW: '新 SKU', RESTOCK: '回架', QTY_UP: '庫存+' };
 // 排序權重：新 SKU 最稀有放最前，其次回架，最後庫存+（社群慣例：回架不該混在全新品裡）
 var IN_ORDER = { NEW: 0, RESTOCK: 1, QTY_UP: 2 };
 function isGameCat(cat) { return /Games/i.test(String(cat || '')); }
-// 「只看遊戲片」開關（進貨／變動共用）——只影響顯示，不動資料
-function applyGameFilter(rows) {
-  return S.gamesOnly ? rows.filter(function (r) { return isGameCat(r.cat); }) : rows;
+
+/* ── 大分類：照 CeX 官網自己的分類（2026-10-05 用 Algolia facet 抓下來的**完整對照**，不是猜的）
+   CeX 官方 superCat 只有四個：Gaming / Phones / Computing / Electronics（＋Other）。
+   阿夜要六格，所以把 Gaming 再拆成「遊戲」（軟體）與「遊戲機」（主機＋周邊）——
+   判斷法：fine category 含 "Games"＝遊戲，其餘 Gaming 的都是硬體／周邊＝遊戲機。 */
+var CEX_CATS = {
+  '手機': ['Android Phones', 'iPhones', 'Phone Accessories', 'Apple iPhone Accessories', 'Power Banks', 'Network Unlocked Phones', 'Mobile Broadband'],
+  '電腦': ['Laptops - Windows', 'Laptops - Apple Mac', 'PC Keyboards', 'Desktops - Windows', 'Apple iPad', 'PC Mice', 'Tablets - Android', 'Desktops - Apple Mac', 'PC Accessories', 'PC Monitors', 'PCI-Express Graphics Cards', 'PC Gaming Controllers', 'PC Headsets', 'Handheld Gaming PCs', 'Wireless Routers', 'Tablet Accessories', 'NVMe SSDs', 'Tablets - Windows', 'SATA SSDs', 'PC Speakers', 'Apple iPad Accessories', 'USB External Hard Drives', 'DDR5 - Desktop 288pin', 'Intel Processors', 'Wireless Cards & Adaptors', 'SATA Hard Drives', 'USB Flash Drives', 'Chromebooks', 'AMD Processors', 'Capture Cards', 'External USB SSDs', 'Network Attached Hard Drives', 'Laptop Hard Drives', 'Apple Displays', 'DDR4 - Desktop 288pin', 'Single Board Computers', 'Laptops - Other OS', 'DDR3 - Desktop 240 Pin', 'DDR4 - Laptop 260 Pin', 'DDR5 - Laptop 262 Pin', 'DDR3 - Laptop 204 Pin', 'Steam Machines', 'IDE Hard Drives', 'Desktops - Other OS'],
+  '電器': ['Headphones & Earphones', 'Smartwatches', 'Media Player Accessories', 'Apple Watch Accessories', 'Camera Accessories', 'Digital SLR Cameras', 'Compact Cameras', 'Apple Watch', 'Cameras - Compact System', 'Camera Lenses', 'Camcorders', 'Smart Rings', 'Activity Trackers', 'Wearables Accessories', 'Drones', 'Secure Digital Micro (SD)', 'Smart Security', 'Smart Assistant', 'Media Players', 'Soundbars', 'TV Media Players', 'eReaders', 'Projectors', 'VR Tech', 'Apple iPod', 'Secure Digital (SD)', 'Drones Accessories', 'Wearables', 'Apple AirPods, EarPods & Headphones', 'Hybrid Smartwatches', 'Batteries', 'Smart Lighting', 'Robots', 'Smart Home Monitoring', 'Compact Flash (CF) Cards', 'Vision Accessories', 'Digital Photo Frames', 'Smart Accessories', 'LED Televisions', 'Health Monitors', 'Memory Stick Duo', 'Secure Digital Mini (SD)', 'Memory Stick Micro (M2)']
+};
+var CAT2BIG = {};
+(function () {
+  for (var k in CEX_CATS) { CEX_CATS[k].forEach(function (n) { CAT2BIG[n] = k; }); }
+})();
+function bigOf(cat) {
+  var c = String(cat || '');
+  if (CAT2BIG[c]) return CAT2BIG[c];
+  if (/Games/i.test(c)) return '遊戲';
+  if (/Consoles|Accessories|MicroConsoles|Gaming Batteries/i.test(c)) return '遊戲機';
+  return '其他';
+}
+// 大分類開關（進貨／變動共用）——只影響顯示，不動資料
+function applyBigFilter(rows) {
+  if (!S.big || S.big === 'all') return rows;
+  return rows.filter(function (r) { return bigOf(r.cat) === S.big; });
 }
 function setGnum(allRows) {
   var el = $('#gnum'); if (!el) return;
-  var g = allRows.filter(function (r) { return isGameCat(r.cat); }).length;
-  el.textContent = S.gamesOnly ? ('遊戲片 ' + g + ' 筆') : ('遊戲片 ' + g + ' / 全部 ' + allRows.length + ' 筆');
+  if (!S.big || S.big === 'all') {
+    el.textContent = '全部 ' + allRows.length.toLocaleString() + ' 筆';
+    return;
+  }
+  var n = allRows.filter(function (r) { return bigOf(r.cat) === S.big; }).length;
+  el.textContent = S.big + ' ' + n + ' / 全部 ' + allRows.length.toLocaleString() + ' 筆';
 }
 
-function inRows() {
+/* 進貨＝「庫存變動」的精華版（阿夜 2026-10-05）：只用電腦發布的帳，切換鈕照「變動」那套。
+   雜訊不排除在外——「庫存+」裡面留一顆「全部」讓他自己選。 */
+var IN_SEGS = [
+  { id: 'NEW',     label: '新 SKU', events: ['NEW'] },
+  { id: 'RESTOCK', label: '回架',   events: ['RESTOCK'] },
+  { id: 'QTY_UP',  label: '庫存+',  events: ['QTY_UP'] }
+];
+var IN_RARE_CUT = 3;   // 「庫存+」的稀有門檻（他自己的判準：庫存多的東西越不稀有）
+
+function inRowsAll() {
   // 「進貨」固定用**電腦發布**的那份（累積的帳、涵蓋全部品類）。
   // 不用手機自己算的——那個只涵蓋「上次同步 → 這次」，一天按兩次同步就會漏掉前一輪。
   var rows = (CHANGES && CHANGES.rows) || [];
-  rows = rows.filter(function (r) { return !!IN_LABEL[r.event]; });
-  return applyGameFilter(rows);
+  return applyBigFilter(rows.filter(function (r) { return !!IN_LABEL[r.event]; }));
+}
+function inIsRare(r) {
+  var q = newQty(r);
+  return r.event !== 'QTY_UP' || q === null || q <= IN_RARE_CUT;
+}
+function inSegRows(all, s) {
+  return all.filter(function (r) { return s.events.indexOf(r.event) >= 0; });
 }
 
 // 用本機快取補價格／庫存（快取只有遊戲片；其他品類查不到就留白，不假造）
@@ -388,30 +544,68 @@ function inRow(r, m) {
 
 function renderIncoming() {
   if (!CHANGES) return '<div class="empty">進貨帳載入中…</div>';
-  var all = (CHANGES && CHANGES.rows) || [];
-  setGnum(all.filter(function (r) { return !!IN_LABEL[r.event]; }));
-  var rows = inRows();
-  var gN = rows.filter(function (r) { return isGameCat(r.cat); }).length;
-  var hd = '<div class="chghd">☁ <b>CeX 進貨紀錄</b>（' + rows.length + ' 筆' +
-    (S.gamesOnly ? '，只看遊戲片' : '，其中遊戲片 ' + gN + ' 筆') +
-    '）<div class="n">新 SKU／回架／庫存+' + (S.gamesOnly ? '' : '｜遊戲片排最前') +
-    '｜來自電腦發布的帳，涵蓋全部品類</div></div>';
-  if (!rows.length) return hd + '<div class="empty">目前沒有進貨紀錄。<br><span style="opacity:.72;font-size:12px">CeX 一天進的貨本來就少，這是正常的（空手而回是常態）。</span></div>';
+  var all = inRowsAll();
+  setGnum(all);
+  var cur = S.inSeg || 'NEW', seg = null;
+  IN_SEGS.forEach(function (s) { if (s.id === cur) seg = s; });
+  if (!seg) seg = IN_SEGS[0];
+
+  // 切換鈕（照「變動」那套）：每顆帶精華筆數；庫存+ 另外顯示總數
+  var segBar = '<div class="qseg">' + IN_SEGS.map(function (s) {
+    var rows = inSegRows(all, s);
+    var rare = rows.filter(inIsRare).length;
+    return '<button data-in="' + s.id + '" class="' + (s.id === seg.id ? 'on' : '') + '">' +
+      s.label + ' ' + rare + (rows.length > rare ? '／' + rows.length : '') + '</button>';
+  }).join('') + '</div>';
+
+  var segRows = inSegRows(all, seg);
+  var rareRows = segRows.filter(inIsRare);
+  // 有庫存數字才給濾（新 SKU 的 new 是價格，所以那層不給）；沒有雜訊時不顯示那顆
+  var hasQty = (seg.id === 'QTY_UP' || seg.id === 'RESTOCK');
+  var canFilter = hasQty && segRows.length > rareRows.length;
+  var shown = (canFilter && S.inNoise) ? segRows : rareRows;
+
+  // L3：稀有／全部（雜訊不排除，留按鈕自己選）
+  var sub = '';
+  if (canFilter) {
+    sub = '<div class="qseg sub">' +
+      '<button data-in="' + seg.id + '" data-noise="0" class="' + (S.inNoise ? '' : 'on') + '">稀有（≤' + IN_RARE_CUT + '） ' + rareRows.length + '</button>' +
+      '<button data-in="' + seg.id + '" data-noise="1" class="' + (S.inNoise ? 'on' : '') + '">全部 ' + segRows.length + '</button>' +
+      '</div>';
+  }
+
+  var gN = shown.filter(function (r) { return isGameCat(r.cat); }).length;
+  var hd = '<div class="chghd">☁ <b>CeX 進貨紀錄</b>　' + shown.length + ' 筆' +
+    (S.big && S.big !== 'all' ? '（' + S.big + '）' : '（其中遊戲片 ' + gN + ' 筆）') +
+    '<div class="n">新 SKU／回架／庫存+｜遊戲片排最前｜來自電腦發布的帳，涵蓋全部品類' +
+    (canFilter && !S.inNoise
+      ? '<br>預設只留稀有的（新庫存 ≤ ' + IN_RARE_CUT + ' 片）；要看全部按下面的「全部」'
+      : '') +
+    '</div></div>';
+
+  if (!shown.length) {
+    return segBar + sub + hd + '<div class="empty">這一類目前沒有紀錄。<br><span style="opacity:.72;font-size:12px">CeX 一天進的貨本來就少，這是正常的（空手而回是常態）。</span></div>';
+  }
   var m = cacheIndex();
   var byDay = {};
-  rows.forEach(function (r) { var d = dmyUtc(r.t) || '—'; (byDay[d] = byDay[d] || []).push(r); });
-  return hd + Object.keys(byDay).sort(function (a, b) { return b.localeCompare(a); }).map(function (d) {
-    // ① 遊戲片在最前（這是我們的本業）② 新 SKU → 回架 → 庫存+ ③ 名稱
+  shown.forEach(function (r) { var d = dmyUtc(r.t) || '—'; (byDay[d] = byDay[d] || []).push(r); });
+  return segBar + sub + hd + Object.keys(byDay).sort(function (a, b) { return b.localeCompare(a); }).map(function (d, idx) {
+    var openDay = isInDayOpen(d, idx);
+    var head = '<div class="dayhd daytoggle" data-day="' + esc(d) + '" data-def="' + (idx === 0 ? '1' : '0') + '">' +
+      (openDay ? '▾ ' : '▸ ') + d + '（' + byDay[d].length + ' 筆）' +
+      (openDay ? '' : '<span class="dn">收起</span>') + '</div>';
+    if (!openDay) return head;
+    // ① 遊戲片在最前（這是我們的本業）② 庫存+ 依「新庫存」由少到多（越稀有越前）③ 名稱
     var arr = byDay[d].slice().sort(function (a, b) {
       var ga = isGameCat(a.cat) ? 0 : 1, gb = isGameCat(b.cat) ? 0 : 1;
       if (ga !== gb) return ga - gb;
-      var ea = IN_ORDER[a.event], eb = IN_ORDER[b.event];
-      ea = ea === undefined ? 9 : ea; eb = eb === undefined ? 9 : eb;
-      if (ea !== eb) return ea - eb;
+      if (seg.id === 'QTY_UP') {
+        var qa = newQty(a), qb = newQty(b);
+        if (qa !== null && qb !== null && qa !== qb) return qa - qb;
+      }
       return String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hant');
     });
-    return '<div class="dayhd">' + d + '（' + byDay[d].length + ' 筆）</div>' +
-      arr.map(function (r) { return inRow(r, m); }).join('');
+    return head + arr.map(function (r) { return inRow(r, m); }).join('');
   }).join('');
 }
 
@@ -435,31 +629,101 @@ function priceOf(r, m) {
   }
   return 0;
 }
-// 價格變動幅度（只有漲／降算得出；其他事件一律排最後）
+// 價格變動幅度（漲／降／買取價都能算；其他事件一律 −1 → 排在後面）
 function magOf(r) {
-  if (r.event === 'PRICE_UP' || r.event === 'PRICE_DOWN') {
+  if (r.event === 'PRICE_UP' || r.event === 'PRICE_DOWN' || r.event === 'FLOOR_CHANGE') {
     var a = Number(r.old), b = Number(r.new);
     if (isFinite(a) && isFinite(b)) return Math.abs(b - a);
   }
   return -1;
 }
-function sortChangeRows(rows, m) {
-  var s = S.csort, out = rows.slice();
-  if (s === 'event') {
-    out.sort(function (a, b) {
-      var ea = EVLABEL[a.event] || a.event, eb = EVLABEL[b.event] || b.event;
-      if (ea !== eb) return ea.localeCompare(eb, 'zh-Hant');
-      return String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hant');
-    });
-  } else if (s === 'mag') {
-    out.sort(function (a, b) { return magOf(b) - magOf(a); });
-  } else if (s === 'price') {
-    out.sort(function (a, b) { return priceOf(b, m) - priceOf(a, m); });
-  } else if (s === 'name') {
-    out.sort(function (a, b) { return String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hant'); });
-  }
-  return out;
+/* ── 變動分組（阿夜 2026-10-05 定；動這塊之前先讀 ui-redesign-report-20261005.md）
+   順序：新上架 ＞ 庫存+（含回架）＞ 降價 ＞ 庫存− ＞ 其他
+   預設展開：新上架、庫存+；其餘收起。「其他」是安全網——保證沒有任何事件會消失。
+   庫存+ 的訊號強弱＝**加完之後剩多少**：愈少愈稀有（阿夜原話「庫存多的東西越不稀有」）。 */
+var CHG_GROUPS = [
+  { id: 'STOCK', label: '庫存變動',   open: true,  events: ['NEW', 'QTY_UP', 'RESTOCK', 'QTY_DOWN', 'SOLD_OUT', 'GONE'] },
+  { id: 'PRICE', label: '價格變動',   open: false, events: ['PRICE_DOWN', 'PRICE_UP', 'FLOOR_CHANGE'] },
+  { id: 'STORE', label: '分店變動',   open: false, events: ['STORE_CHANGE'] }
+];
+/* 組內切換鈕（阿夜 2026-10-05 定）：同一組裡多種事件，用按鈕切換、一次看一種，按鈕帶筆數 */
+var SEG_GROUPS = {
+  STOCK: [
+    { id: 'NEW',  label: '新上架',     events: ['NEW'] },
+    { id: 'UP',   label: '庫存+',      events: ['QTY_UP', 'RESTOCK'] },
+    { id: 'DOWN', label: '庫存−',      events: ['QTY_DOWN'] },
+    { id: 'GONE', label: '賣光／消失', events: ['SOLD_OUT', 'GONE'] }
+  ],
+  PRICE: [
+    { id: 'DOWN', label: '降價', events: ['PRICE_DOWN'] },
+    { id: 'UP',   label: '漲價', events: ['PRICE_UP'] },
+    { id: 'BUY',  label: '買取價變動', events: ['FLOOR_CHANGE'] }
+  ]
+};
+var CHG_OTHER = { id: 'OTHER', label: '其他變動', open: false, events: [] };
+function chgGroupOf(ev) {
+  for (var i = 0; i < CHG_GROUPS.length; i++) { if (CHG_GROUPS[i].events.indexOf(ev) >= 0) return CHG_GROUPS[i]; }
+  return CHG_OTHER;
 }
+function newQty(r) { var n = Number(r.new); return isFinite(n) ? n : null; }
+function qtyTier(q) { if (q === null) return 3; if (q <= 1) return 1; if (q <= 3) return 2; if (q <= 9) return 3; return 4; }
+// ⚠️ `new` 欄位的意義看事件：庫存類＝數量、價格類＝價格、NEW＝價格。要排序時必須先分辨。
+function isQtyEvent(r) {
+  var e = r.event;
+  return e === 'QTY_UP' || e === 'QTY_DOWN' || e === 'RESTOCK' || e === 'SOLD_OUT';
+}
+function stockOf(r) { return isQtyEvent(r) ? newQty(r) : null; }
+function sortGroupRows(rows) {
+  var s = S.csort;
+  return rows.slice().sort(function (a, b) {
+    var ra = (a.event === 'RESTOCK') ? 0 : 1, rb = (b.event === 'RESTOCK') ? 0 : 1;
+    if (ra !== rb) return ra - rb;                                 // ① 回架永遠在這組最前
+    if (s !== 'time') {                                            // ② 稀有優先
+      var qa = stockOf(a), qb = stockOf(b);
+      if (qa !== null && qb !== null && qa !== qb) return qa - qb; //    庫存類：新庫存 少→多（稀有先行）
+      var pa = magOf(a), pb = magOf(b);
+      if (pa !== pb) return pb - pa;                               //    價格類：變動幅度 大→小
+    }
+    return 0;                                                      // ③ 時間：保持帳本原順序（新→舊）
+  });
+}
+// 分店變動：old/new 是「字串裝的 JSON 陣列」→ 只顯示差異（阿夜 2026-10-05：整份陣列印出來沒法看）
+function storeDiff(r) {
+  var a, b;
+  try { a = JSON.parse(r.old); b = JSON.parse(r.new); } catch (e) { return null; }
+  if (!Array.isArray(a) || !Array.isArray(b)) return null;
+  return {
+    added: b.filter(function (x) { return a.indexOf(x) < 0; }),
+    removed: a.filter(function (x) { return b.indexOf(x) < 0; })
+  };
+}
+function chgRowHTML(r) {
+  var cls = 'chg';
+  if (r.event === 'RESTOCK') cls += ' restock';
+  else if (r.event === 'QTY_UP') cls += ' q' + qtyTier(newQty(r));
+  var meta = '';
+  if (r.event === 'STORE_CHANGE') {
+    var d = storeDiff(r);
+    if (d && (d.added.length || d.removed.length)) {
+      meta = esc(r.cat || '') +
+        (d.added.length ? '　<span class="sadd">＋' + d.added.map(esc).join('、') + '</span>' : '') +
+        (d.removed.length ? '　<span class="sdel">−' + d.removed.map(esc).join('、') + '</span>' : '');
+    } else if (d) {
+      // 店別一模一樣、只是陣列順序換了 → 不要退回印整串（那正是要修掉的醜樣）
+      meta = esc(r.cat || '') + '　<span class="sdim">（店別沒變，只是順序）</span>';
+    }
+  }
+  if (!meta) {
+    meta = esc(r.cat || '') + (r.old != null && r.new != null ? '　' + esc(r.old) + ' → ' + esc(r.new) : '');
+  }
+  return '<div class="' + cls + '"><span class="ev ' + esc(r.event) + '">' + (EVLABEL[r.event] || esc(r.event)) + '</span>' +
+    '<div class="txt">' + esc(r.name || r.boxId) + '<div class="n">' + meta + '</div></div></div>';
+}
+function isGrpOpen(g) { return S.chgOpen[g.id] === undefined ? g.open : S.chgOpen[g.id]; }
+// 日期折疊：預設只展開「最新的一天」，其餘收起（阿夜 2026-10-05 定）
+function isDayOpen(d, idx) { return S.dayOpen[d] === undefined ? idx === 0 : S.dayOpen[d]; }
+// 進貨頁的日期折疊用自己的狀態（不跟變動頁共用，免得兩頁互相影響）
+function isInDayOpen(d, idx) { return S.inDayOpen[d] === undefined ? idx === 0 : S.inDayOpen[d]; }
 
 function renderChanges() {
   var all = currentChangeRows();
@@ -470,7 +734,7 @@ function renderChanges() {
   var nDay = (CHANGES && CHANGES.rows) ? CHANGES.rows.length : 0;
   var nSync = hasLocalChanges() ? LOC_CHANGES.rows.length : null;
   setGnum(all);
-  var rows = applyGameFilter(all);
+  var rows = applyBigFilter(all);
   var hd = '';
   if (LOC_META && LOC_META.incomplete) {
     hd += '<div class="chghd warn">⚠️ 上次同步只抓到 ' + LOC_META.now + ' 筆（比上次 ' + LOC_META.prev +
@@ -480,8 +744,8 @@ function renderChanges() {
   hd += '<div class="chghd">' +
     (S.cscope === 'sync'
       ? '📱 <b>上次同步後</b>（只含遊戲片）'
-      : '🌐 <b>全天變動帳</b>（涵蓋全部品類）') +
-    '　' + rows.length.toLocaleString() + ' 筆' + (S.gamesOnly ? '（只看遊戲片）' : '') +
+      : '🌐 <b>全天變動帳</b>' + (S.big && S.big !== 'all' ? '（只看' + S.big + '）' : '（涵蓋全部品類）')) +
+    '　' + rows.length.toLocaleString() + ' 筆' + (S.big && S.big !== 'all' ? '（' + S.big + '）' : '') +
     '<div class="n">🌐 全天 ' + nDay.toLocaleString() + ' 筆　｜　📱 上次同步後 ' +
     (nSync === null ? '尚無基準' : nSync.toLocaleString() + ' 筆') +
     (S.cscope === 'sync' ? '｜不含「分店變動」與「狀態變動」' : '') + '</div></div>';
@@ -489,13 +753,45 @@ function renderChanges() {
   var m = cacheIndex();
   var byDay = {};
   rows.forEach(function (r) { var d = dmyUtc(r.t) || '—'; (byDay[d] = byDay[d] || []).push(r); });
-  return hd + Object.keys(byDay).map(function (d) {
-    var arr = sortChangeRows(byDay[d], m);
-    return '<div class="dayhd">' + d + '（' + arr.length + ' 筆）</div>' + arr.map(function (r) {
-      return '<div class="chg"><span class="ev ' + esc(r.event) + '">' + (EVLABEL[r.event] || esc(r.event)) + '</span>' +
-        '<div class="txt">' + esc(r.name || r.boxId) +
-        '<div class="n">' + esc(r.cat || '') + (r.old != null && r.new != null ? '　' + esc(r.old) + ' → ' + esc(r.new) : '') + '</div></div></div>';
-    }).join('');
+  var days = Object.keys(byDay).sort(function (a, b) { return b.localeCompare(a); });  // 新→舊（日期是 YY/MM/DD）
+  return hd + days.map(function (d, idx) {
+    var arr = byDay[d];
+    var openDay = isDayOpen(d, idx);
+    var inner = '';
+    if (openDay) {
+      var groups = {};
+      arr.forEach(function (r) { var g = chgGroupOf(r.event); (groups[g.id] = groups[g.id] || { g: g, rows: [] }).rows.push(r); });
+      var order = CHG_GROUPS.map(function (g) { return g.id; });
+      if (groups.OTHER) order = order.concat(['OTHER']);
+      inner = order.filter(function (id) {
+        return groups[id];
+      }).map(function (id) {
+        var it = groups[id], open = isGrpOpen(it.g);
+        var body = '';
+        var segs = SEG_GROUPS[id];
+        if (open && segs) {
+          // 切換鈕：一次看一種；按鈕上一定要帶筆數（不然不知道另一邊有多少）
+          var cur = S.seg[id] || segs[0].id, sel = null;
+          segs.forEach(function (s) { if (s.id === cur) sel = s; });
+          if (!sel) sel = segs[0];
+          body = '<div class="qseg">' + segs.map(function (s) {
+            var n = it.rows.filter(function (r) { return s.events.indexOf(r.event) >= 0; }).length;
+            return '<button data-g="' + id + '" data-s="' + s.id + '" class="' + (s.id === sel.id ? 'on' : '') + '">' +
+              s.label + ' ' + n + '</button>';
+          }).join('') + '</div>' + sortGroupRows(it.rows.filter(function (r) {
+            return sel.events.indexOf(r.event) >= 0;
+          })).map(chgRowHTML).join('');
+        } else if (open) {
+          body = sortGroupRows(it.rows).map(chgRowHTML).join('');
+        }
+        return '<div class="grp' + (open ? '' : ' closed') + '" data-grp="' + id + '">' +
+          '<span class="arw">' + (open ? '▾' : '▸') + '</span>' + it.g.label +
+          '<span class="cnt">' + it.rows.length + ' 筆</span></div>' + body;
+      }).join('');
+    }
+    return '<div class="dayhd daytoggle" data-day="' + esc(d) + '" data-def="' + (idx === 0 ? '1' : '0') + '">' +
+      (openDay ? '▾ ' : '▸ ') + d + '（' + arr.length + ' 筆）' +
+      (openDay ? '' : '<span class="dn">收起</span>') + '</div>' + inner;
   }).join('');
 }
 
@@ -507,8 +803,53 @@ function render() {
   $('#gbar').style.display = ledgerTab ? '' : 'none';
   $('#cbar').style.display = (S.tab === 'chg') ? '' : 'none';
   $('#ctrls').style.display = ledgerTab ? 'none' : '';
-  if (S.tab === 'chg') { list.innerHTML = renderChanges(); return; }
-  if (S.tab === 'new') { list.innerHTML = renderIncoming(); return; }
+  if (S.tab === 'chg') {
+    list.innerHTML = renderChanges();
+    Array.prototype.forEach.call(list.querySelectorAll('.grp'), function (el) {
+      el.onclick = function () {
+        var id = el.getAttribute('data-grp');
+        var g = CHG_OTHER;
+        CHG_GROUPS.forEach(function (x) { if (x.id === id) g = x; });
+        S.chgOpen[id] = !isGrpOpen(g);
+        render();
+      };
+    });
+    Array.prototype.forEach.call(list.querySelectorAll('.qseg button'), function (el) {
+      el.onclick = function () {
+        S.seg[el.getAttribute('data-g')] = el.getAttribute('data-s');   // 切換，不是開關
+        render();
+      };
+    });
+    Array.prototype.forEach.call(list.querySelectorAll('.daytoggle'), function (el) {
+      el.onclick = function () {
+        var d = el.getAttribute('data-day');
+        var cur = S.dayOpen[d] === undefined ? (el.getAttribute('data-def') === '1') : S.dayOpen[d];
+        S.dayOpen[d] = !cur;
+        render();
+      };
+    });
+    return;
+  }
+  if (S.tab === 'new') {
+    list.innerHTML = renderIncoming();
+    Array.prototype.forEach.call(list.querySelectorAll('button[data-in]'), function (el) {
+      el.onclick = function () {
+        S.inSeg = el.getAttribute('data-in');
+        var nz = el.getAttribute('data-noise');
+        if (nz !== null) S.inNoise = nz === '1';
+        render();
+      };
+    });
+    Array.prototype.forEach.call(list.querySelectorAll('.daytoggle'), function (el) {
+      el.onclick = function () {
+        var d = el.getAttribute('data-day');
+        var cur = S.inDayOpen[d] === undefined ? (el.getAttribute('data-def') === '1') : S.inDayOpen[d];
+        S.inDayOpen[d] = !cur;
+        render();
+      };
+    });
+    return;
+  }
 
   var rows = S.live ? S.live.items : baseRows();
   if (!rows) {
@@ -628,6 +969,7 @@ async function doSync() {
     if (prev && prev.items && prev.items.length) { await IDB.set('games_prev', prev); }
     await IDB.set('games', rec);
     CACHE = toRows(res.cols, res.items);
+    buildMenu();   // 分類選單要用剛同步下來的資料重算（筆數才會跟清單一致）
     // ⭐ 自己算變動——用與電腦**同一份規則**（ledger-core.mjs），只算手機拿得到的欄位
     try {
       if (prev && prev.items && prev.items.length && window.CexDiff) {
@@ -699,6 +1041,7 @@ async function boot() {
     if (rec && rec.items && rec.items.length) {
       CACHE = toRows(rec.cols, rec.items);
       CACHE_AT = rec.at;
+      buildMenu();   // ⚠️ 一定要在 CACHE 載入後再建一次（啟動時那次 CACHE 還是 null）
     }
     // 手機自己算的變動（有就用它，沒有才退回電腦發布的那份）
     // ⚠️ 兩個要分開還原：就算沒有 loc_changes（例如這一輪被守門攔下、沒產生變動），
@@ -752,7 +1095,7 @@ document.querySelectorAll('.tabs button').forEach(function (b) {
 document.querySelectorAll('#gbar button').forEach(function (b) {
   b.onclick = function () {
     document.querySelectorAll('#gbar button').forEach(function (x) { x.classList.toggle('on', x === b); });
-    S.gamesOnly = b.dataset.g === 'games';
+    S.big = b.dataset.b || 'all';
     render();
   };
 });
