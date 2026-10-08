@@ -701,6 +701,9 @@ function chgRowHTML(r) {
   var cls = 'chg';
   if (r.event === 'RESTOCK') cls += ' restock';
   else if (r.event === 'QTY_UP') cls += ' q' + qtyTier(newQty(r));
+  // 箭頭講的是哪一種變動（2026-10-08 阿夜：要寫清楚是買取價還是現價）
+  var arrowKind = (r.event === 'PRICE_UP' || r.event === 'PRICE_DOWN') ? '現價'
+                : (r.event === 'FLOOR_CHANGE') ? '買取' : '';
   var meta = '';
   if (r.event === 'STORE_CHANGE') {
     var d = storeDiff(r);
@@ -714,8 +717,17 @@ function chgRowHTML(r) {
     }
   }
   if (!meta) {
-    meta = esc(r.cat || '') + (r.old != null && r.new != null ? '　' + esc(r.old) + ' → ' + esc(r.new) : '');
+    meta = esc(r.cat || '');
+    if (r.old != null && r.new != null) {
+      // 價格類：帶單位＋RM 格式（舊的 1350.0 這種看不出是什麼）；庫存類維持純數字
+      meta += '　' + (arrowKind
+        ? arrowKind + ' ' + fmtRM(Number(r.old)) + ' → ' + fmtRM(Number(r.new))
+        : esc(r.old) + ' → ' + esc(r.new));
+    }
   }
+  // 每一列都要看得到現價與買取價，但箭頭已經講過的那一種就不重複（2026-10-08 阿夜）
+  if (arrowKind !== '現價' && r.price > 0) meta += '　現價 ' + fmtRM(Number(r.price));
+  if (arrowKind !== '買取' && r.cash > 0) meta += '　買取 ' + fmtRM(Number(r.cash));
   return '<div class="' + cls + '"><span class="ev ' + esc(r.event) + '">' + (EVLABEL[r.event] || esc(r.event)) + '</span>' +
     '<div class="txt">' + esc(r.name || r.boxId) + '<div class="n">' + meta + '</div></div></div>';
 }
