@@ -148,7 +148,7 @@
   <header>
     <div class="title">
       <h1>CeX</h1>
-      <span class="tag" id="ver">uiv17</span>
+      <span class="tag" id="ver">uiv18</span>
       <span class="spacer"></span>
       <button class="sync" id="sync">同步遊戲片</button>
     </div>
@@ -726,8 +726,13 @@ function chgRowHTML(r) {
     }
   }
   // 每一列都要看得到現價與買取價，但箭頭已經講過的那一種就不重複（2026-10-08 阿夜）
-  if (arrowKind !== '現價' && r.price > 0) meta += '　現價 ' + fmtRM(Number(r.price));
-  if (arrowKind !== '買取' && r.cash > 0) meta += '　買取 ' + fmtRM(Number(r.cash));
+  // ⚠️ 2026-10-08 修正：手機自己算的變動（LOC_CHANGES）只帶 {t,event,boxId,name,cat,old,new}，
+    //    沒有 r.price／r.cash ⇒ 先讀事件值，讀不到就退回本機快取查（cacheIndex）。
+    var _ci = cacheIndex(), _cit = (_ci && r.boxId != null) ? _ci[r.boxId] : null;
+    var _p = (r.price > 0) ? r.price : (_cit && _cit.price > 0 ? _cit.price : 0);
+    var _c = (r.cash  > 0) ? r.cash  : (_cit && _cit.cash  > 0 ? _cit.cash  : 0);
+    if (arrowKind !== '現價' && _p > 0) meta += '　現價 ' + fmtRM(Number(_p));
+    if (arrowKind !== '買取' && _c > 0) meta += '　買取 ' + fmtRM(Number(_c));
   return '<div class="' + cls + '"><span class="ev ' + esc(r.event) + '">' + (EVLABEL[r.event] || esc(r.event)) + '</span>' +
     '<div class="txt">' + esc(r.name || r.boxId) + '<div class="n">' + meta + '</div></div></div>';
 }
