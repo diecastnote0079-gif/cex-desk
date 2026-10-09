@@ -86,6 +86,10 @@ if (COMPACT) {
 items.sort((a, b) => b[3] - a[3]);
 log(`資料：${items.length} 筆（來源 ${source}${runId ? `，run ${runId}` : ''}）${changes.length ? `｜變動 ${changes.length} 筆` : ''}`);
 
+// 「沒有可用基準」≠「真的零變動」：雲端備援（--from-compact）沒有本機帳本可比、runId 也拿不到，
+//   changes 永遠是空陣列（不是算出來的）→ 視為沒有基準；本機路徑要有上一輪 run（run_id）才算有基準。
+const hasBaseline = !COMPACT && runId !== null;
+
 // ── 2. 準備發佈目錄（要先有 repo 才能寫檔：git clone 不接受非空目錄）──
 function ensureRepo() {
   if (DRY) return;
@@ -120,8 +124,20 @@ if (existsSync(WEB_SRC)) {
 }
 
 write('items.json', { cols: COLS, items });
-write('changes.json', { generatedAt: utcNow(), days: CHG_DAYS, rows: changes });
-write('meta.json', { generatedAt: utcNow(), source, runId, scope, count: items.length, changes: changes.length });
+// 沒有可用基準又沒變動時，不能用空的 rows 蓋掉上一次已發佈的帳本（2026-10-09 雲端備援空帳事故）
+let changesStale = false, publishedChanges = changes.length;
+let oldChg = null;
+try { oldChg = JSON.parse(readFileSync(join(WEB, 'changes.json'), 'utf8')); } catch {}
+if (changes.length === 0 && !hasBaseline && oldChg) {
+  changesStale = true;
+  publishedChanges = oldChg.rows?.length ?? 0;
+  log(`⚠️ 沒有可用基準（${source}${runId ? '' : '，無 run_id'}）→ 保留上一次的 changes.json（${publishedChanges} 筆），不覆蓋成空帳。`);
+} else {
+  write('changes.json', { generatedAt: utcNow(), days: CHG_DAYS, rows: changes });
+}
+const meta = { generatedAt: utcNow(), source, runId, scope, count: items.length, changes: publishedChanges };
+if (changesStale) meta.changesStale = true;   // 誠實標記：這一輪的 changes 是沿用上一次的帳本，不是本次算出來的
+write('meta.json', meta);
 if (!DRY) {
   const bytes = readFileSync(join(WEB, 'items.json')).length;
   log(`items.json ${(bytes / 1048576).toFixed(1)} MB（未壓縮；GitHub Pages 會自動 gzip）`);
