@@ -1,17 +1,17 @@
 {
- "at": "2026-10-09T01:17:20Z",
- "runId": "20261009091638",
+ "at": "2026-10-09T03:52:38Z",
+ "runId": "20261009115156",
  "scope": "web",
- "items": 77109,
- "new": 56,
+ "items": 77118,
+ "new": 11,
  "gone": 2,
- "priceChanged": 523,
- "qtyChanged": 642,
+ "priceChanged": 0,
+ "qtyChanged": 34,
  "rebuilt": false,
  "notified": true,
  "sent": {
   "ok": true,
-  "message_id": 454,
+  "message_id": 455,
   "error": null
  },
  "fetchSec": 41
