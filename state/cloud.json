@@ -1,18 +1,18 @@
 {
- "at": "2026-10-09T13:21:27Z",
- "runId": "20261009212046",
+ "at": "2026-10-13T01:18:41Z",
+ "runId": "20261013091756",
  "scope": "web",
- "items": 77179,
- "new": 68,
- "gone": 7,
- "priceChanged": 0,
- "qtyChanged": 618,
- "rebuilt": false,
+ "items": 77346,
+ "new": 180,
+ "gone": 13,
+ "priceChanged": 142,
+ "qtyChanged": 2262,
+ "rebuilt": true,
  "notified": true,
  "sent": {
   "ok": true,
-  "message_id": 488,
+  "message_id": 514,
   "error": null
  },
- "fetchSec": 40
+ "fetchSec": 43
 }
